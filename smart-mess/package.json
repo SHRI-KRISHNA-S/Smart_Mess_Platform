@@ -6,10 +6,19 @@
   "scripts": {
     "setup:db": "npm run setup:db --prefix backend",
     "build": "npm run build --prefix frontend",
+    "build:all": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
     "start": "node backend/src/index.js",
+    "start:prod": "node backend/scripts/setup-db.js && node backend/src/index.js",
+    "dev": "node scripts/dev.js",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
     "test:api": "node scripts/api-test.js",
-    "test:daily-poll": "node scripts/daily-poll-test.js"
+    "test:daily-poll": "node scripts/daily-poll-test.js",
+    "test:three-meals": "node scripts/three-meal-polls-test.js",
+    "test:default-yes": "node scripts/default-yes-voting-test.js",
+    "test:ml": "node scripts/ml-integration-test.js",
+    "ml:train": "ml/.venv/Scripts/python.exe ml/src/train.py",
+    "ml:service": "ml/.venv/Scripts/python.exe ml/src/service.py",
+    "test": "node scripts/default-yes-voting-test.js && node scripts/three-meal-polls-test.js && node scripts/daily-poll-test.js && node scripts/ml-integration-test.js"
   }
 }

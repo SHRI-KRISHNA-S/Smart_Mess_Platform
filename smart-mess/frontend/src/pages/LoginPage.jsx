@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,6 +12,19 @@ export default function LoginPage() {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSuccess = (userData) => {
+    login(userData);
+    if (userData.role === 'admin') {
+      navigate('/admin');
+    } else {
+      navigate('/poll');
+    }
+  };
+
+  const handleGoogleError = (errorMessage) => {
+    setError(errorMessage);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,6 +74,18 @@ export default function LoginPage() {
 
         {error && <div className="alert alert-error" id="login-error-msg">{error}</div>}
 
+        {/* Google Authentication with BIT Domain Restriction */}
+        <GoogleSignInButton
+          text="signin_with"
+          onSuccess={handleGoogleSuccess}
+          onError={handleGoogleError}
+          disabled={submitting}
+        />
+
+        <div className="auth-divider">
+          <span>or sign in with credentials</span>
+        </div>
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label" htmlFor="login-email">Email Address</label>
@@ -67,7 +94,7 @@ export default function LoginPage() {
               type="email"
               required
               className="form-input"
-              placeholder="e.g. rahul@college.edu or admin@mess.local"
+              placeholder="e.g. rahul@bitsathy.ac.in"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -97,11 +124,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-          Don't have an account?{' '}
-          <Link to="/register" style={{ fontWeight: 600 }}>
-            Register here
-          </Link>
+        <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.8rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+          Students sign in directly with their verified BIT Google account.<br />
+          Student accounts and department details are established automatically.
         </div>
       </div>
     </div>

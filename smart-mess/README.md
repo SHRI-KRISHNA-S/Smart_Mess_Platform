@@ -1,14 +1,14 @@
 # AI-Powered Smart Mess Meal Pre-Booking and Food Waste Reduction Agent
 
-A production-ready prototype built for college mess dining management. This system solves food wastage and preparation uncertainty in residential institutions by gathering **menu preferences** and **self-reported meal intentions** from students (both home hostellers and external visitors) ahead of meal service.
+A production-ready prototype built for college mess dining management. This system solves food wastage and preparation uncertainty in residential institutions by gathering **official mess menu access** and **self-reported meal intentions** from campus diners (both students and faculty) ahead of meal service.
 
 ---
 
 ## 📌 Project Overview
 In typical educational institutions, mess kitchens either overproduce food (leading to massive wastage) or underproduce (causing shortages). This prototype introduces two non-invasive digital touchpoints:
-1. **Interactive Menu Preference Poll**: Four curated meal options allowing students to express preference for tomorrow's menu.
-2. **Meal Intention Self-Reporting**: An in-app notice asking students whether they plan to eat the upcoming meal, with a strict cutoff lock before kitchen prep begins.
-3. **Kitchen Admin Dashboard**: Real-time analytics breaking down preferences, intention rates, home vs. external student distributions, and an individual audit log.
+1. **Official Mess Timetable & Nutrition Schedule**: Full daily dining timetable and monthly meal schedule available to students and faculty.
+2. **Meal Intention Self-Reporting**: An in-app notice asking students and faculty whether they plan to eat the upcoming meal, with a strict cutoff lock before kitchen prep begins.
+3. **Kitchen Admin Dashboard**: Real-time analytics breaking down meal attendance intentions, student and faculty counts, and historical audit logs.
 
 ---
 
@@ -157,22 +157,20 @@ npm run test:api
 - `GET /api/health` and `GET /api/config` (home college prefill)
 - Registration schema validation (rejection of short passwords, malformed emails)
 - Duplicate email conflict handling (`409 Conflict`)
-- Home student vs. external visitor registration
+- Student and Faculty role registration (`201 Created`)
+- Rejection of obsolete external student registration (`400 Bad Request`)
 - Login failure with timing-safe dummy hash comparison (`401 Unauthorized`)
 - Tokenless protected route rejection (`401 Unauthorized`)
-- Non-admin access to `/api/admin/*` forbidden (`403 Forbidden`)
-- Fetching active poll with exactly 4 Indian mess menu items
-- Atomic vote casting and prevention of race conditions
-- Duplicate vote enforcement via database unique constraint (`409 Conflict`)
-- Live vote count and percentage calculation
+- Non-admin access to `/api/admin/*` forbidden (`403 Forbidden` for Student & Faculty)
+- Active poll inspection and menu options
+- Preference poll voting decommissioned and rejected (`403 Forbidden`)
 - Meal intention notification retrieval (`GET /api/notifications/meal-intent`)
-- Answering meal intention ("Yes, I'll eat" vs "No, I won't")
+- Answering meal intention ("Yes, I'll eat" vs "No, I won't") for Student and Faculty
 - Changing meal intention response prior to cutoff (`PUT /api/meal-intent`)
 - Rejection of invalid intention bodies (non-boolean values, incorrect date)
-- Admin detailed poll results, voter records, and home vs. external breakdown
-- Admin meal intention metrics (Yes, No, No-response counts and response rate)
+- Admin detailed poll results, voter records, and Student vs Faculty breakdown
+- Admin meal intention metrics (Yes, No, No-response counts and response rate by role)
 - Admin poll closing and reopening (`PATCH /api/admin/polls/:id`)
-- Rejection of votes after poll is closed (`409 Poll closed`)
 - Unknown API routes return standard JSON 404
 
 ---
@@ -183,19 +181,19 @@ npm run test:api
 |---|---|---|---|
 | `GET` | `/api/health` | Public | Server uptime and health check |
 | `GET` | `/api/config` | Public | Exposes `HOME_COLLEGE_NAME` for registration auto-fill |
-| `POST` | `/api/auth/register` | Public | Registers a new student (`student` role only) |
+| `POST` | `/api/auth/register` | Public | Registers a new user (`student` or `faculty` role) |
 | `POST` | `/api/auth/login` | Public | Authenticates user and issues `httpOnly` JWT cookie |
 | `POST` | `/api/auth/logout` | Public | Clears session cookie |
 | `GET` | `/api/auth/me` | Authenticated | Retrieves current authenticated user profile |
-| `GET` | `/api/polls/active` | Authenticated | Retrieves active poll, 4 menu options, user vote, and results |
-| `POST` | `/api/polls/:id/vote` | Authenticated | Atomically casts a vote for a menu option |
+| `GET` | `/api/polls/active` | Authenticated | Retrieves active poll and menu options |
+| `POST` | `/api/polls/:id/vote` | Authenticated | Decommissioned; returns 403 Forbidden |
 | `GET` | `/api/polls/:id/results` | Authenticated | Fetches live voting percentages and counts |
 | `GET` | `/api/notifications/meal-intent` | Authenticated | Returns pending intention status, upcoming meal date/type, and answer |
 | `PUT` | `/api/meal-intent` | Authenticated | Records or updates self-reported meal intention |
 | `GET` | `/api/admin/polls` | Admin Only | Lists all polls with summary counts |
-| `GET` | `/api/admin/polls/:id/results`| Admin Only | Detailed breakdown, voter audit table, and home/external split |
+| `GET` | `/api/admin/polls/:id/results`| Admin Only | Detailed breakdown, voter audit table, and student/faculty counts |
 | `PATCH`| `/api/admin/polls/:id` | Admin Only | Opens or closes a poll (opening closes all others) |
-| `GET` | `/api/admin/meal-intent` | Admin Only | Yes/No/No-response counts, response rate, and student type split |
+| `GET` | `/api/admin/meal-intent` | Admin Only | Yes/No/No-response counts, response rate, and role split (student & faculty) |
 
 ---
 
@@ -218,33 +216,81 @@ npm run test:api
 
 ---
 
-## 🔮 Future AI Module Design (Documented Future Scope)
-> **Note**: This is an architectural proposal for future research. No fake AI or simulated prediction code is included in this prototype.
-
-### Goal:
-To build an AI demand prediction engine that forecasts precise headcounts and ingredient consumption for mess kitchens, directly minimizing food surplus and waste.
-
-### Required Training Data:
-1. **Historical Mess Consumption Records**: Actual kilograms of food prepared vs. kilograms consumed vs. waste logs over 6–12 months.
-2. **Temporal & Calendar Features**: Day of week, meal type (breakfast/lunch/dinner), academic schedules, semester examination periods, festival breaks, and weekends.
-3. **Weather Conditions**: Local temperature, rainfall index, and extreme weather events that alter hostel dining habits.
-4. **Pre-Booking Touchpoint Data**: Menu preference vote tallies and meal intention response rates collected by this platform.
-5. **Special Campus Events**: Sports tournaments, cultural fests, symposiums, and visiting delegations.
-
-### Proposed Machine Learning Architecture:
-- **Model**: A hybrid architecture utilizing **Gradient Boosted Decision Trees** (XGBoost/LightGBM) for tabular feature importance combined with **Temporal Convolutional Networks (TCN)** or **LSTM** time-series forecasting.
-- **Objective Function**: An asymmetric loss function (e.g., custom quantile loss) that penalizes food waste (overproduction) while strictly bounding shortages below a 2% tolerance threshold.
-- **Continuous Learning**: By continuously comparing pre-booking intention data with actual kitchen post-service consumption weights, the model will learn institutional dining patterns over time.
-
 ---
+
+## 🤖 Integrated AI/ML Food Waste Prediction Subsystem
+
+The Smart Mess platform features a production-ready Machine Learning model integrated into the Kitchen Administration Dashboard to forecast food waste, calculate consumed portion efficiency, and optimize batch preparation quantities ahead of meal service.
+
+### 1. Empirical Dataset & Provenance
+* **Dataset**: *Food waste dataset: secondary school in Finland 2024-2025*
+* **Publisher**: Arja Kuusisto, Jenni Latva, Ella Wilén, et al. (University of Vaasa & City of Lapua)
+* **Persistent DOI**: [10.5281/zenodo.20825233](https://doi.org/10.5281/zenodo.20825233)
+* **License**: Creative Commons Attribution 4.0 International (CC-BY-4.0)
+* **Dataset Characteristics**: 155 longitudinal dining service cycles tracking daily student headcounts (251–546 diners) alongside exact kitchen surplus waste (`KSW kg`) and plate leftovers (`PW kg`) in metric kilograms.
+
+### 2. Architecture & Pipeline
+```
+[React Admin Dashboard]
+        │
+        ▼ (POST /api/ml/predict-wastage - JWT Admin Protected)
+[Node.js / Express Backend]
+        │
+        ├──► [Python FastAPI Microservice (http://127.0.0.1:5001)]
+        │       OR
+        └──► [Python Direct CLI Subprocess Fallback (ml/.venv)]
+                │
+                ▼
+      [Trained Scikit-Learn Pipeline]
+        - Random Forest Regressor (300 estimators, max_depth=10, min_samples_leaf=2)
+        - Target: total_wastage_kg (kg)
+        - Model Artifact: wastage_model_rf_v2.joblib
+```
+
+### 3. Chronological Holdout Benchmark: Random Forest vs. Ridge Baseline
+Evaluated on the exact same chronological 80/20 train/test split (124 train, 31 test) with 5-fold `TimeSeriesSplit` cross-validation:
+
+| Metric | Random Forest Regressor (v2.0.0) | Ridge Regression Baseline (v1.0.0) |
+| :--- | :--- | :--- |
+| **Test MAE (kg)** | 3.88 kg | **2.33 kg** |
+| **Test RMSE (kg)** | 4.65 kg | **2.73 kg** |
+| **Test R² Score** | -0.04 | **0.64** |
+| **TimeSeries CV MAE (kg)** | 5.73 kg | **3.50 kg** |
+| **Train R² Score** | 0.86 | 0.86 |
+| **Generalization Gap (R²)** | 0.8959 | **0.2176** |
+
+#### Feature Importance Analysis (Random Forest)
+1. **Planned Food Batch** (`food_prepared_kg`): **43.32%**
+2. **Expected Diners** (`total_students`): **30.19%**
+3. **Previous Day Waste Baseline** (`past_wastage_kg`): **8.83%**
+4. **Day of Week** (`day_of_week`): **7.93%**
+5. **3-Day Rolling Average** (`rolling_avg_wastage_3d`): **4.99%**
+6. **Calendar Month** (`month`): **4.73%**
+
+### 4. Machine Learning API Endpoints
+* `POST /api/ml/predict-wastage`: (Admin Only) Generates wastage forecasts using the active Random Forest model.
+* `GET /api/ml/stats`: (Admin Only) Returns model metadata, feature importances, training metrics, and holdout validation samples for dashboard charts.
+* `GET /api/ml/health`: Returns ML engine operational readiness status.
+
+### 5. Quick ML Commands
+```bash
+# 1. Run complete ML integration test suite (6 tests)
+npm run test:ml
+
+# 2. Retrain Random Forest model and refresh artifacts
+npm run ml:train
+
+# 3. Optional: Start persistent FastAPI prediction microservice
+npm run ml:service
+```
 
 ## ⏱ 5-Minute Project Review Demo Script
 
 | Time | Stage | Action & Talking Points |
 |---|---|---|
-| **0:00 - 0:45** | **Introduction & Problem Statement** | Open the browser at `http://localhost:5173`. Explain to the evaluators: *"Hostel mess facilities face severe food waste due to unpredictable attendance and preference uncertainty. Our prototype introduces an AI-ready pre-booking agent with dual touchpoints: menu preference voting and meal intention reporting."* |
-| **0:45 - 1:45** | **Student Registration (Home vs. External)** | Click **Register**. Explain: *"Our system supports both home hostellers and visiting guests."* Select **Home Student**; point out that the college name is pre-filled from `/api/config`. Register `Aarav Kumar`. Then log out, click Register again, select **External Student**, and show how visitors can type their visiting college name (`PSG Tech`). |
-| **1:45 - 2:45** | **In-App Meal Intention Notification** | Log in as `Aarav Kumar`. Point out the banner at the top: *"Will you eat mess food for LUNCH tomorrow?"* Explain: *"This is our single in-app notification. No spam, no external SMS."* Click **"Yes, I'll eat"**. Notice updates to show the confirmed choice. Demonstrate the **"Change answer"** button and explain the automated cutoff deadline enforcement. |
-| **2:45 - 3:30** | **4-Option Menu Poll & Duplicate Block** | Scroll to the menu poll. Point out the 4 realistic Indian mess options (Thali, Deluxe Combo, Biryani, Millet Pulao). Click **"Vote For This"** on Biryani. The UI shows *"You voted for Dum Vegetable Biryani Bowl"*, the button disables, and the live progress bar updates. Show the evaluator the honesty disclaimer: *"Votes show preference distribution, not an absolute demand forecast."* |
-| **3:30 - 4:30** | **Admin Dashboard & Analytics** | Sign out and log in with the admin credentials (`admin@mess.local`). Navigate to the **Admin Dashboard**. Highlight: (1) Total registered students count, (2) Total poll votes with home vs. external breakdown, (3) Real-time percentages per menu option, (4) Self-reported meal intention rate and Yes/No breakdown, and (5) The individual voter audit log. |
-| **4:30 - 5:00** | **Poll Lifecycle & Future AI Scope** | In the Admin Dashboard, click **"Close This Poll"**. Switch to another window as a student and show that voting is blocked with a clear notice. Conclude by summarizing the future AI module design documented in the README: how intention and preference data will feed a gradient boosted demand forecasting model once real waste logs are accumulated. |
+| **0:00 - 0:45** | **Introduction & Problem Statement** | Open the browser at `http://localhost:5173`. Explain: *"Hostel mess facilities face severe food waste due to unpredictable attendance. Our prototype introduces a smart mess dining platform with two distinct user roles alongside administrators: Students and Faculty."* |
+| **0:45 - 1:45** | **User Registration (Student vs. Faculty)** | Click **Register**. Explain: *"Our system supports both Students and Faculty members."* Select **Student** or **Faculty** from the Role dropdown; point out that the institution name is pre-filled. Complete registration and show immediate dashboard navigation. |
+| **1:45 - 2:45** | **In-App Meal Intention Notification** | Point out the notification banner at the top: *"Will you eat mess food for upcoming service?"* Explain: *"This is our streamlined in-app notice with cutoff enforcement."* Click **"Yes, I'll eat"**. Notice updates to show the confirmed choice. Demonstrate the **"Change answer"** button. |
+| **2:45 - 3:30** | **Official Mess Timetable & Nutrition Roster** | View the embedded official monthly mess schedule and service hours (Breakfast, Lunch, Evening Tea, Dinner). |
+| **3:30 - 4:30** | **Admin Dashboard & Analytics** | Sign out and log in with admin credentials (`admin@mess.local`). Navigate to the **Admin Dashboard**. Highlight: (1) Total registered students and faculty counts, (2) Historical poll vote records, (3) Real-time meal intention responses split by Student and Faculty roles, and (4) The individual audit log. |
+| **4:30 - 5:00** | **Security & Access Enforcement** | Demonstrate that Students and Faculty cannot access the `/admin` URL, and that decommissioned external-student voting is blocked on the API. |

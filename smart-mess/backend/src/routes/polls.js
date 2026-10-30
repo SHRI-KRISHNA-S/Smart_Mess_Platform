@@ -7,8 +7,15 @@ const pollService = require('../services/pollService');
 
 const router = express.Router();
 
-const voteSchema = z.object({
-  menu_item_id: z.number().int().positive('Valid menu item ID is required')
+const voteVoteChoiceSchema = z.object({
+  mealDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'mealDate must be in YYYY-MM-DD format'),
+  mealType: z.string().min(1, 'mealType is required'),
+  voteChoice: z.enum(['YES', 'NO', 'yes', 'no']).optional(),
+  willEat: z.boolean().optional()
+}).refine(data => data.voteChoice !== undefined || data.willEat !== undefined, {
+  message: "Either voteChoice ('YES' or 'NO') or willEat (boolean) is required"
 });
 
 // Helper to calculate results for a poll
@@ -45,10 +52,28 @@ async function getPollResultsData(pollId) {
   };
 }
 
+// GET /api/polls/three-meals
+// Returns data for Morning Tiffin, Evening Lunch, and Night Dinner
+// For student/faculty, detailed count intelligence is strictly omitted
+router.get('/three-meals', requireAuth, async (req, res, next) => {
+  try {
+    const testDate = req.headers['x-test-date'] || (req.query.test_date && process.env.NODE_ENV !== 'production' ? req.query.test_date : null);
+    const testTime = req.headers['x-test-time'] || (req.query.test_time && process.env.NODE_ENV !== 'production' ? req.query.test_time : null);
+    const userRole = req.user?.role || 'student';
+    const data = await pollService.getThreeMealPolls(testDate, testTime, req.user.id, userRole);
+    return res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/polls/active
+// Returns active poll + threeMeals data (counts hidden from non-admin)
 router.get('/active', requireAuth, async (req, res, next) => {
   try {
     const testDate = req.headers['x-test-date'] || (req.query.test_date && process.env.NODE_ENV !== 'production' ? req.query.test_date : null);
+    const testTime = req.headers['x-test-time'] || (req.query.test_time && process.env.NODE_ENV !== 'production' ? req.query.test_time : null);
+    const userRole = req.user?.role || 'student';
     const poll = await pollService.getActivePoll(testDate);
 
     if (!poll) {
@@ -60,7 +85,7 @@ router.get('/active', requireAuth, async (req, res, next) => {
 
     const pollId = poll.id;
 
-    // Check user's own vote
+    // Check user's own vote for historical poll
     const [myVotes] = await db.query(
       `SELECT v.id, v.menu_item_id, v.created_at, mi.name AS menu_item_name
        FROM votes v
@@ -79,18 +104,21 @@ router.get('/active', requireAuth, async (req, res, next) => {
     // Get items and results
     const results = await getPollResultsData(pollId);
 
-    // Check if poll cutoff has passed or poll date is expired
-    const todayStr = testDate || pollService.getLocalDateString();
-    const isPastClosesAt = poll.closes_at ? new Date(poll.closes_at) <= new Date() : false;
-    const isPastMealDate = poll.meal_date < todayStr;
+    // Check cutoff
+    const isClosed = pollService.isMealPollClosed(poll.meal_date, poll.meal_type, poll.closes_at, testDate, testTime);
+
+    // Fetch three meals payload with role-based count filtering
+    const threeMealsData = await pollService.getThreeMealPolls(testDate, testTime, req.user.id, userRole);
 
     return res.json({
       poll: {
         ...poll,
-        is_closed: !poll.is_active || isPastClosesAt || isPastMealDate
+        is_closed: !poll.is_active || isClosed
       },
       userVote,
-      results
+      results,
+      threeMeals: threeMealsData.meals,
+      meals: threeMealsData.meals
     });
   } catch (err) {
     next(err);
@@ -121,109 +149,111 @@ router.get('/:id/results', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/polls/:id/vote
-// Atomic vote casting checking active status and closes_at
-router.post('/:id/vote', requireAuth, validateBody(voteSchema), async (req, res, next) => {
+// POST /api/polls/vote
+// Submit or update a YES / NO vote for a meal poll with strict deadline enforcement
+router.post('/vote', requireAuth, validateBody(voteVoteChoiceSchema), async (req, res, next) => {
   try {
-    const pollId = parseInt(req.params.id, 10);
-    const { menu_item_id } = req.body;
-    const userId = req.user.id;
+    const { mealDate } = req.body;
+    const mealType = pollService.normalizeMealType(req.body.mealType);
+    const willEat = req.body.voteChoice !== undefined
+      ? req.body.voteChoice.toUpperCase() === 'YES'
+      : Boolean(req.body.willEat);
+    const voteChoice = willEat ? 'YES' : 'NO';
 
-    if (isNaN(pollId)) {
-      return res.status(400).json({ error: 'Invalid poll ID', details: 'Poll ID must be an integer' });
-    }
-
-    // 1. Verify poll existence and status
-    const [polls] = await db.query(
-      'SELECT id, is_active, closes_at, DATE_FORMAT(meal_date, "%Y-%m-%d") AS meal_date FROM polls WHERE id = ?',
-      [pollId]
-    );
-
-    if (polls.length === 0) {
-      return res.status(404).json({
-        error: 'Poll not found',
-        details: 'The specified poll does not exist.'
+    // Validate role permissions: only students and faculty (residents) vote
+    if (!['student', 'faculty'].includes(req.user.role)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        details: 'Only eligible students and residents are permitted to vote. Kitchen admin cannot vote in meal polls.'
       });
     }
 
-    const poll = polls[0];
-    const isPastClosesAt = poll.closes_at ? new Date(poll.closes_at) <= new Date() : false;
-    const todayStr = pollService.getLocalDateString();
-    const isPastMealDate = poll.meal_date < todayStr;
+    const testDate = req.headers['x-test-date'] || (req.query.test_date && process.env.NODE_ENV !== 'production' ? req.query.test_date : null);
+    const testTime = req.headers['x-test-time'] || (req.query.test_time && process.env.NODE_ENV !== 'production' ? req.query.test_time : null);
 
-    if (!poll.is_active || isPastClosesAt || isPastMealDate) {
+    // 1. Check if poll exists in database and if it was closed
+    const [pollRows] = await db.query(
+      'SELECT id, is_active, closes_at FROM polls WHERE meal_date = ? AND meal_type = ?',
+      [mealDate, mealType]
+    );
+
+    const isCutoffPassed = pollService.isMealPollClosed(
+      mealDate,
+      mealType,
+      pollRows[0]?.closes_at || null,
+      testDate,
+      testTime
+    );
+
+    const isPollClosed = (pollRows.length > 0 && pollRows[0].is_active === 0) || isCutoffPassed;
+
+    if (isPollClosed) {
       return res.status(409).json({
         error: 'Poll closed',
-        details: 'This poll is no longer active or has passed its voting deadline.'
+        details: 'This poll is closed. Voting is no longer available.',
+        isClosed: true
       });
     }
 
-    // 2. Check if user already voted in this poll
-    const [existingVote] = await db.query(
-      'SELECT id FROM votes WHERE poll_id = ? AND user_id = ?',
-      [pollId, userId]
+    // 2. Insert or update vote (One vote per student per meal per date)
+    const willEatInt = willEat ? 1 : 0;
+    await db.execute(
+      `INSERT INTO meal_responses (user_id, meal_date, meal_type, will_eat, vote_choice, responded_at)
+       VALUES (?, ?, ?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE
+         will_eat = VALUES(will_eat),
+         vote_choice = VALUES(vote_choice),
+         updated_at = NOW()`,
+      [req.user.id, mealDate, mealType, willEatInt, voteChoice]
     );
 
-    if (existingVote.length > 0) {
-      return res.status(409).json({
-        error: 'Already voted',
-        details: 'You have already cast your vote in this poll. Each student can vote only once.'
-      });
+    // 3. Status message based on vote
+    const statusMessage = willEat
+      ? 'Your response is recorded: Attending meal.'
+      : 'Your response is recorded: Skipping meal.';
+
+    const responsePayload = {
+      message: 'Vote recorded successfully',
+      mealDate,
+      mealType,
+      voteChoice,
+      willEat,
+      hasVoted: true,
+      userVote: voteChoice,
+      logicalVote: voteChoice,
+      defaultVote: 'YES',
+      isClosed: false,
+      statusMessage
+    };
+
+    // Detailed counts are exposed ONLY to authorized Admin accounts
+    if (req.user.role === 'admin') {
+      const counts = await pollService.getAuthoritativeMealCount(mealDate, mealType);
+      responsePayload.expectedCount = counts.expectedCount;
+      responsePayload.eligibleStudentCount = counts.eligibleStudentCount;
+      responsePayload.yesVotes = counts.yesVotes;
+      responsePayload.noVotes = counts.noVotes;
+      responsePayload.notVoted = counts.notVoted;
+      responsePayload.mealsToPrepare = counts.mealsToPrepare;
+      responsePayload.mealCount = counts.mealCount;
+      responsePayload.studentMealCount = counts.studentMealCount;
+      responsePayload.totalYesCount = counts.totalYesCount;
+      responsePayload.totalNoCount = counts.totalNoCount;
     }
 
-    // 3. Verify menu item belongs to this poll
-    const [items] = await db.query(
-      'SELECT id, name FROM menu_items WHERE id = ? AND poll_id = ?',
-      [menu_item_id, pollId]
-    );
-
-    if (items.length === 0) {
-      return res.status(400).json({
-        error: 'Invalid menu item',
-        details: 'The selected menu option does not belong to this poll.'
-      });
-    }
-
-    // 4. Atomic INSERT ... SELECT enforcing active & not expired conditions
-    try {
-      const [insertResult] = await db.execute(
-        `INSERT INTO votes (poll_id, menu_item_id, user_id)
-         SELECT p.id, ?, ?
-         FROM polls p
-         WHERE p.id = ? 
-           AND p.is_active = 1 
-           AND (p.closes_at IS NULL OR p.closes_at > NOW())
-           AND p.meal_date >= CURDATE()`,
-        [menu_item_id, userId, pollId]
-      );
-
-      if (insertResult.affectedRows === 0) {
-        return res.status(409).json({
-          error: 'Poll closed',
-          details: 'Unable to record vote because the poll is closed or past its deadline.'
-        });
-      }
-
-      const results = await getPollResultsData(pollId);
-
-      return res.status(201).json({
-        message: 'Vote recorded successfully',
-        choice: items[0].name,
-        menu_item_id,
-        results
-      });
-    } catch (insertErr) {
-      if (insertErr.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({
-          error: 'Already voted',
-          details: 'You have already voted in this poll.'
-        });
-      }
-      throw insertErr;
-    }
+    return res.json(responsePayload);
   } catch (err) {
     next(err);
   }
+});
+
+// POST /api/polls/:id/vote
+// Preference poll voting has been decommissioned. External student voting permissions are rejected.
+router.post('/:id/vote', requireAuth, async (req, res) => {
+  return res.status(403).json({
+    error: 'Forbidden',
+    details: 'Preference poll voting has been decommissioned. External student voting is no longer supported.'
+  });
 });
 
 module.exports = router;

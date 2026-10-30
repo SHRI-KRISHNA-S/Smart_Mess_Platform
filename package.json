@@ -1,0 +1,10 @@
+{
+  "name": "s5-mini-project",
+  "version": "1.0.0",
+  "description": "Smart Mess Meal Pre-Booking and Food Waste Reduction Agent",
+  "private": true,
+  "scripts": {
+    "build": "npm run build:all --prefix smart-mess",
+    "start": "npm run start:prod --prefix smart-mess"
+  }
+}

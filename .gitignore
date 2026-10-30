@@ -6,3 +6,6 @@ dist/
 /.agents/
 .archify/
 .taste-skill/
+ml/.venv/
+**/__pycache__/
+*.py[cod]

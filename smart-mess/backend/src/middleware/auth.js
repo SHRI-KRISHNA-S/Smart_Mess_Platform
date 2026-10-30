@@ -14,7 +14,7 @@ async function requireAuth(req, res, next) {
 
     const decoded = jwt.verify(token, JWT_SECRET);
     const [rows] = await db.query(
-      'SELECT id, name, email, college_name, student_type, role FROM users WHERE id = ?',
+      'SELECT id, name, email, college_name, student_type, role, department, batch_start_year, batch_end_year, profile_completed FROM users WHERE id = ?',
       [decoded.userId]
     );
 
@@ -48,7 +48,19 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireStudentOrFaculty(req, res, next) {
+  if (!req.user || (req.user.role !== 'student' && req.user.role !== 'faculty')) {
+    return res.status(403).json({
+      error: 'Forbidden',
+      details: 'Access restricted to students and faculty.'
+    });
+  }
+  next();
+}
+
 module.exports = {
   requireAuth,
-  requireAdmin
+  requireAdmin,
+  requireStudentOrFaculty
 };
+

@@ -130,23 +130,38 @@ router.put('/meal-intent', requireAuth, validateBody(mealIntentSchema), async (r
     }
 
     const willEatInt = willEat ? 1 : 0;
+    const voteChoice = willEat ? 'YES' : 'NO';
 
     await db.execute(
-      `INSERT INTO meal_responses (user_id, meal_date, meal_type, will_eat, responded_at)
-       VALUES (?, ?, ?, ?, NOW())
+      `INSERT INTO meal_responses (user_id, meal_date, meal_type, will_eat, vote_choice, responded_at)
+       VALUES (?, ?, ?, ?, ?, NOW())
        ON DUPLICATE KEY UPDATE
          will_eat = VALUES(will_eat),
+         vote_choice = VALUES(vote_choice),
          updated_at = NOW()`,
-      [userId, mealDate, mealType, willEatInt]
+      [userId, mealDate, mealType, willEatInt, voteChoice]
     );
 
-    return res.json({
+    const responsePayload = {
       message: 'Meal intention response recorded successfully',
       mealDate,
       mealType,
       willEat,
+      voteChoice,
       canChange: upcoming.canChange
-    });
+    };
+
+    if (req.user.role === 'admin') {
+      const counts = await pollService.getAuthoritativeMealCount(mealDate, mealType);
+      responsePayload.mealCount = counts.mealCount;
+      responsePayload.mealsToPrepare = counts.mealsToPrepare;
+      responsePayload.expectedCount = counts.expectedCount;
+      responsePayload.yesVotes = counts.yesVotes;
+      responsePayload.noVotes = counts.noVotes;
+      responsePayload.notVoted = counts.notVoted;
+    }
+
+    return res.json(responsePayload);
   } catch (err) {
     next(err);
   }

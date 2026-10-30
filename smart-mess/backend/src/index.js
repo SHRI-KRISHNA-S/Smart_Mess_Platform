@@ -6,13 +6,15 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 
 // Validate critical environment configurations before proceeding
-const { validateEnv, PORT, NODE_ENV, HOME_COLLEGE_NAME, CORS_ORIGIN, AUTH_RATE_LIMIT_MAX } = require('./config/env');
+const { validateEnv, PORT, NODE_ENV, HOME_COLLEGE_NAME, CORS_ORIGIN, AUTH_RATE_LIMIT_MAX, GOOGLE_CLIENT_ID } = require('./config/env');
 validateEnv();
 
 const authRoutes = require('./routes/auth');
 const pollRoutes = require('./routes/polls');
 const { router: mealIntentRoutes } = require('./routes/mealIntent');
 const adminRoutes = require('./routes/admin');
+const messMenuRoutes = require('./routes/messMenu');
+const mlRoutes = require('./routes/ml');
 const { errorHandler, notFoundHandler } = require('./middleware/error');
 const { syncDailyPolls, startDailyPollScheduler } = require('./services/pollService');
 
@@ -41,6 +43,7 @@ const authLimiter = rateLimit({
   max: AUTH_RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test' || process.env.SKIP_RATE_LIMIT === 'true',
   message: {
     error: 'Too many attempts',
     details: 'Too many authentication attempts from this IP, please try again after 15 minutes.'
@@ -62,20 +65,24 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Public config endpoint (exposes HOME_COLLEGE_NAME)
+// Public config endpoint (exposes HOME_COLLEGE_NAME and googleClientId)
 app.get('/api/config', (req, res) => {
   res.json({
-    homeCollegeName: HOME_COLLEGE_NAME
+    homeCollegeName: HOME_COLLEGE_NAME,
+    googleClientId: GOOGLE_CLIENT_ID || ''
   });
 });
 
 // Mount modular API routes
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/google', authLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/polls', pollRoutes);
 app.use('/api', mealIntentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ml', mlRoutes);
+app.use('/api/mess-menu', messMenuRoutes);
 
 // In production, serve the built frontend assets
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');

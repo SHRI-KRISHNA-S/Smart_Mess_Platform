@@ -1,0 +1,137 @@
+[
+  {
+    "index": 1,
+    "total_students": 431,
+    "food_prepared_kg": 205.39,
+    "actual_wastage_kg": 18.372,
+    "predicted_wastage_kg": 21.78,
+    "ridge_predicted_kg": 20.77,
+    "error_kg": 3.41
+  },
+  {
+    "index": 2,
+    "total_students": 393,
+    "food_prepared_kg": 178.9,
+    "actual_wastage_kg": 8.689,
+    "predicted_wastage_kg": 15.59,
+    "ridge_predicted_kg": 12.16,
+    "error_kg": 6.9
+  },
+  {
+    "index": 3,
+    "total_students": 418,
+    "food_prepared_kg": 196.67,
+    "actual_wastage_kg": 18.547,
+    "predicted_wastage_kg": 15.29,
+    "ridge_predicted_kg": 17.74,
+    "error_kg": -3.26
+  },
+  {
+    "index": 4,
+    "total_students": 366,
+    "food_prepared_kg": 168.87,
+    "actual_wastage_kg": 12.147,
+    "predicted_wastage_kg": 12.01,
+    "ridge_predicted_kg": 13.01,
+    "error_kg": -0.14
+  },
+  {
+    "index": 5,
+    "total_students": 401,
+    "food_prepared_kg": 184.65,
+    "actual_wastage_kg": 13.527,
+    "predicted_wastage_kg": 12.66,
+    "ridge_predicted_kg": 13.38,
+    "error_kg": -0.87
+  },
+  {
+    "index": 6,
+    "total_students": 357,
+    "food_prepared_kg": 179.87,
+    "actual_wastage_kg": 25.94,
+    "predicted_wastage_kg": 21.31,
+    "ridge_predicted_kg": 25.32,
+    "error_kg": -4.63
+  },
+  {
+    "index": 7,
+    "total_students": 370,
+    "food_prepared_kg": 170.82,
+    "actual_wastage_kg": 14.342,
+    "predicted_wastage_kg": 17.79,
+    "ridge_predicted_kg": 14.58,
+    "error_kg": 3.45
+  },
+  {
+    "index": 8,
+    "total_students": 390,
+    "food_prepared_kg": 194.18,
+    "actual_wastage_kg": 25.005,
+    "predicted_wastage_kg": 25.63,
+    "ridge_predicted_kg": 26.52,
+    "error_kg": 0.62
+  },
+  {
+    "index": 9,
+    "total_students": 388,
+    "food_prepared_kg": 177.09,
+    "actual_wastage_kg": 9.516,
+    "predicted_wastage_kg": 16.85,
+    "ridge_predicted_kg": 11.41,
+    "error_kg": 7.33
+  },
+  {
+    "index": 10,
+    "total_students": 494,
+    "food_prepared_kg": 226.64,
+    "actual_wastage_kg": 12.521,
+    "predicted_wastage_kg": 24.14,
+    "ridge_predicted_kg": 15.35,
+    "error_kg": 11.62
+  },
+  {
+    "index": 11,
+    "total_students": 348,
+    "food_prepared_kg": 161.84,
+    "actual_wastage_kg": 14.03,
+    "predicted_wastage_kg": 18.97,
+    "ridge_predicted_kg": 11.74,
+    "error_kg": 4.94
+  },
+  {
+    "index": 12,
+    "total_students": 340,
+    "food_prepared_kg": 155.41,
+    "actual_wastage_kg": 14.043,
+    "predicted_wastage_kg": 13.68,
+    "ridge_predicted_kg": 11.64,
+    "error_kg": -0.36
+  },
+  {
+    "index": 13,
+    "total_students": 394,
+    "food_prepared_kg": 179.85,
+    "actual_wastage_kg": 9.926,
+    "predicted_wastage_kg": 12.21,
+    "ridge_predicted_kg": 12.65,
+    "error_kg": 2.28
+  },
+  {
+    "index": 14,
+    "total_students": 439,
+    "food_prepared_kg": 198.89,
+    "actual_wastage_kg": 10.594,
+    "predicted_wastage_kg": 16.88,
+    "ridge_predicted_kg": 12.18,
+    "error_kg": 6.29
+  },
+  {
+    "index": 15,
+    "total_students": 407,
+    "food_prepared_kg": 185.77,
+    "actual_wastage_kg": 7.569,
+    "predicted_wastage_kg": 12.06,
+    "ridge_predicted_kg": 12.28,
+    "error_kg": 4.49
+  }
+]

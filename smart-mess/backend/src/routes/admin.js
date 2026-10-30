@@ -3,6 +3,7 @@ const { z } = require('zod');
 const db = require('../config/db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { validateBody, validateQuery } = require('../middleware/validate');
+const pollService = require('../services/pollService');
 
 const router = express.Router();
 
@@ -58,11 +59,17 @@ router.get('/polls/:id/results', async (req, res, next) => {
     }
     const poll = polls[0];
 
-    // Total registered students count
+    // Total registered students and faculty count
     const [userCountRows] = await db.query(
-      "SELECT COUNT(*) AS total_students FROM users WHERE role = 'student'"
+      "SELECT role, COUNT(*) AS count FROM users WHERE role IN ('student', 'faculty') GROUP BY role"
     );
-    const registeredStudentCount = userCountRows[0].total_students;
+    let registeredStudentCount = 0;
+    let registeredFacultyCount = 0;
+    userCountRows.forEach(r => {
+      if (r.role === 'student') registeredStudentCount = Number(r.count);
+      if (r.role === 'faculty') registeredFacultyCount = Number(r.count);
+    });
+    const totalRegisteredUsers = registeredStudentCount + registeredFacultyCount;
 
     // Items breakdown
     const [items] = await db.query(
@@ -88,7 +95,7 @@ router.get('/polls/:id/results', async (req, res, next) => {
       };
     });
 
-    // Student type breakdown (home vs external)
+    // Student type breakdown (home vs external - preserved for historical votes)
     const [typeRows] = await db.query(
       `SELECT u.student_type, COUNT(v.id) AS count
        FROM votes v
@@ -109,7 +116,7 @@ router.get('/polls/:id/results', async (req, res, next) => {
 
     // Detailed voters table
     const [voters] = await db.query(
-      `SELECT v.id, u.name AS user_name, u.college_name, u.student_type, mi.name AS choice, v.created_at AS voted_at
+      `SELECT v.id, u.name AS user_name, u.college_name, u.role, u.student_type, mi.name AS choice, v.created_at AS voted_at
        FROM votes v
        JOIN users u ON v.user_id = u.id
        JOIN menu_items mi ON v.menu_item_id = mi.id
@@ -122,6 +129,8 @@ router.get('/polls/:id/results', async (req, res, next) => {
       poll,
       totalVotes,
       registeredStudentCount,
+      registeredFacultyCount,
+      totalRegisteredUsers,
       options: itemsWithPercent,
       breakdownByType,
       voters
@@ -147,8 +156,14 @@ router.patch('/polls/:id', validateBody(patchPollSchema), async (req, res, next)
     }
 
     if (is_active) {
-      // Opening this poll: close all other active polls
-      await db.execute('UPDATE polls SET is_active = 0 WHERE id != ?', [pollId]);
+      // Opening this poll: close other active polls of the same meal type
+      const [targetPoll] = await db.query('SELECT meal_type FROM polls WHERE id = ?', [pollId]);
+      const mType = targetPoll[0]?.meal_type;
+      if (mType) {
+        await db.execute('UPDATE polls SET is_active = 0 WHERE id != ? AND meal_type = ?', [pollId, mType]);
+      } else {
+        await db.execute('UPDATE polls SET is_active = 0 WHERE id != ?', [pollId]);
+      }
       await db.execute('UPDATE polls SET is_active = 1 WHERE id = ?', [pollId]);
     } else {
       // Closing this poll
@@ -171,78 +186,145 @@ router.get('/meal-intent', validateQuery(mealIntentQuerySchema), async (req, res
   try {
     const { date, type } = req.query;
 
-    // Total registered students
+    // Total registered students and faculty
     const [userRows] = await db.query(
-      `SELECT student_type, COUNT(*) AS count
+      `SELECT role, COUNT(*) AS count
        FROM users
-       WHERE role = 'student'
-       GROUP BY student_type`
+       WHERE role IN ('student', 'faculty')
+       GROUP BY role`
     );
 
-    let totalStudents = 0;
-    let homeStudentsTotal = 0;
-    let externalStudentsTotal = 0;
+    let totalUsers = 0;
+    let studentTotal = 0;
+    let facultyTotal = 0;
 
     userRows.forEach(r => {
       const c = Number(r.count);
-      totalStudents += c;
-      if (r.student_type === 'home') homeStudentsTotal = c;
-      if (r.student_type === 'external') externalStudentsTotal = c;
+      totalUsers += c;
+      if (r.role === 'student') studentTotal = c;
+      if (r.role === 'faculty') facultyTotal = c;
     });
 
     // Responses for this meal
     const [responses] = await db.query(
-      `SELECT mr.will_eat, u.student_type, COUNT(*) AS count
+      `SELECT mr.will_eat, u.role, COUNT(*) AS count
        FROM meal_responses mr
        JOIN users u ON mr.user_id = u.id
        WHERE mr.meal_date = ? AND mr.meal_type = ?
-       GROUP BY mr.will_eat, u.student_type`,
+       GROUP BY mr.will_eat, u.role`,
       [date, type]
     );
 
     let yesCount = 0;
     let noCount = 0;
-    let yesHome = 0;
-    let yesExternal = 0;
-    let noHome = 0;
-    let noExternal = 0;
+    let yesStudent = 0;
+    let yesFaculty = 0;
+    let noStudent = 0;
+    let noFaculty = 0;
 
     responses.forEach(r => {
       const cnt = Number(r.count);
       if (r.will_eat === 1) {
         yesCount += cnt;
-        if (r.student_type === 'home') yesHome += cnt;
-        if (r.student_type === 'external') yesExternal += cnt;
+        if (r.role === 'faculty') yesFaculty += cnt;
+        else yesStudent += cnt;
       } else {
         noCount += cnt;
-        if (r.student_type === 'home') noHome += cnt;
-        if (r.student_type === 'external') noExternal += cnt;
+        if (r.role === 'faculty') noFaculty += cnt;
+        else noStudent += cnt;
       }
     });
 
     const totalAnswered = yesCount + noCount;
-    const noResponseCount = Math.max(0, totalStudents - totalAnswered);
+    const noResponseCount = Math.max(0, totalUsers - totalAnswered);
+    const yesPercent = totalUsers > 0 ? Math.round((yesCount / totalUsers) * 100) : 0;
+    const noPercent = totalUsers > 0 ? Math.round((noCount / totalUsers) * 100) : 0;
+    const noResponsePercent = totalUsers > 0 ? Math.round((noResponseCount / totalUsers) * 100) : 0;
+    const responseRate = totalUsers > 0 ? Math.round((totalAnswered / totalUsers) * 100) : 0;
 
-    const yesPercent = totalStudents > 0 ? Number(((yesCount / totalStudents) * 100).toFixed(1)) : 0;
-    const noPercent = totalStudents > 0 ? Number(((noCount / totalStudents) * 100).toFixed(1)) : 0;
-    const noResponsePercent = totalStudents > 0 ? Number(((noResponseCount / totalStudents) * 100).toFixed(1)) : 0;
-    const responseRate = totalStudents > 0 ? Number(((totalAnswered / totalStudents) * 100).toFixed(1)) : 0;
+    // Fetch expected meals from polls
+    const [pollRows] = await db.query(
+      'SELECT expected_count FROM polls WHERE meal_date = ? AND meal_type = ? LIMIT 1',
+      [date, type]
+    );
+    const expectedMeals = (pollRows.length > 0 && pollRows[0].expected_count !== null)
+      ? Number(pollRows[0].expected_count)
+      : 100;
+
+    const mealsToPrepare = Math.max(0, expectedMeals - noStudent);
+    const eligibleStudentCount = studentTotal > 0 ? studentTotal : expectedMeals;
+    const notVotedCount = Math.max(0, eligibleStudentCount - (yesStudent + noStudent));
 
     return res.json({
       meal: { date, type },
-      totalRegisteredStudents: totalStudents,
+      expectedMeals,
+      expectedCount: expectedMeals,
+      eligibleStudentCount,
+      yesVotes: yesStudent,
+      noVotes: noStudent,
+      notVoted: notVotedCount,
+      mealsToPrepare,
+      totalRegisteredStudents: studentTotal, // Preserved for compatibility
+      totalRegisteredUsers: totalUsers,
       summary: {
         yes: { count: yesCount, percentage: yesPercent },
         no: { count: noCount, percentage: noPercent },
         noResponse: { count: noResponseCount, percentage: noResponsePercent },
         responseRate
       },
-      splitByStudentType: {
-        yes: { home: yesHome, external: yesExternal },
-        no: { home: noHome, external: noExternal },
-        totalStudentsByType: { home: homeStudentsTotal, external: externalStudentsTotal }
+      splitByRole: {
+        yes: { student: yesStudent, faculty: yesFaculty },
+        no: { student: noStudent, faculty: noFaculty },
+        totalUsersByRole: { student: studentTotal, faculty: facultyTotal }
       },
-      notice: "Meal intentions are self-reported plans from students who responded. They do not constitute an attendance record or complete demand forecast."
+      splitByStudentType: {
+        yes: { home: yesStudent, external: yesFaculty },
+        no: { home: noStudent, external: noFaculty },
+        totalStudentsByType: { home: studentTotal, external: facultyTotal }
+      },
+      notice: "Meal intentions are self-reported plans from students and faculty who responded. They do not constitute an attendance record or complete demand forecast."
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/three-meals-stats?date=YYYY-MM-DD
+// Returns detailed meal statistics for Morning Tiffin, Evening Lunch, Night Dinner
+router.get('/three-meals-stats', async (req, res, next) => {
+  try {
+    const requestedDate = req.query.date || null;
+    const data = await pollService.getThreeMealPolls(requestedDate, null, req.user.id, 'admin');
+    return res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/admin/polls/:id/expected-count
+// Updates expected meals count for a poll
+const patchExpectedCountSchema = z.object({
+  expected_count: z.number().int().min(0).optional(),
+  expectedCount: z.number().int().min(0).optional()
+}).refine(data => data.expected_count !== undefined || data.expectedCount !== undefined, {
+  message: 'Valid expectedCount integer is required'
+});
+
+router.patch('/polls/:id/expected-count', validateBody(patchExpectedCountSchema), async (req, res, next) => {
+  try {
+    const pollId = parseInt(req.params.id, 10);
+    const count = req.body.expected_count !== undefined ? req.body.expected_count : req.body.expectedCount;
+
+    if (isNaN(pollId)) {
+      return res.status(400).json({ error: 'Invalid poll ID' });
+    }
+
+    await db.execute('UPDATE polls SET expected_count = ? WHERE id = ?', [count, pollId]);
+    const [updated] = await db.query('SELECT * FROM polls WHERE id = ?', [pollId]);
+
+    return res.json({
+      message: 'Expected meal count updated successfully',
+      poll: updated[0]
     });
   } catch (err) {
     next(err);

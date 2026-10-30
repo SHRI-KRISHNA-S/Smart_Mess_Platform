@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+import GoogleSignInButton from '../components/GoogleSignInButton';
+
 export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [studentType, setStudentType] = useState('home');
+  const [role, setRole] = useState('student');
   const [collegeName, setCollegeName] = useState('');
   const [homeCollegeName, setHomeCollegeName] = useState('');
   const [password, setPassword] = useState('');
@@ -15,7 +17,7 @@ export default function RegisterPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Load public config to pre-fill home college name
+  // Load public config to pre-fill college name
   useEffect(() => {
     fetch('/api/config')
       .then((res) => res.json())
@@ -28,15 +30,17 @@ export default function RegisterPage() {
       .catch((err) => console.error('Failed to load config:', err));
   }, []);
 
-  // Update college name when switching student type
-  const handleStudentTypeChange = (e) => {
-    const type = e.target.value;
-    setStudentType(type);
-    if (type === 'home') {
-      setCollegeName(homeCollegeName);
+  const handleGoogleSuccess = (userData) => {
+    login(userData);
+    if (userData.role === 'admin') {
+      navigate('/admin');
     } else {
-      setCollegeName('');
+      navigate('/poll');
     }
+  };
+
+  const handleGoogleError = (errorMessage) => {
+    setError(errorMessage);
   };
 
   const handleSubmit = async (e) => {
@@ -62,8 +66,8 @@ export default function RegisterPage() {
         body: JSON.stringify({
           name,
           email,
-          college_name: collegeName,
-          student_type: studentType,
+          college_name: collegeName || homeCollegeName,
+          role,
           password
         })
       });
@@ -92,14 +96,45 @@ export default function RegisterPage() {
       <div className="card">
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.25rem' }}>
-            Student Registration
+            Portal Registration
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            Register as a home student or external visiting student
+            Register as a Student or Faculty member
           </p>
         </div>
 
         {error && <div className="alert alert-error" id="register-error-msg">{error}</div>}
+
+        {/* Quick Google Sign-Up with Domain Restriction */}
+        <div style={{ marginBottom: '1rem' }}>
+          <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+            <label className="form-label" htmlFor="register-google-role">Register As</label>
+            <select
+              id="register-google-role"
+              className="form-select"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            >
+              <option value="student">Student</option>
+              <option value="faculty">Faculty</option>
+            </select>
+            <span className="form-hint">Select your role before signing up with your Google account</span>
+          </div>
+
+          <GoogleSignInButton
+            text="signup_with"
+            role={role}
+            collegeName={collegeName || homeCollegeName}
+            name={name}
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            disabled={submitting}
+          />
+        </div>
+
+        <div className="auth-divider">
+          <span>or create standard account</span>
+        </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -129,15 +164,15 @@ export default function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="register-type">Student Type</label>
+            <label className="form-label" htmlFor="register-role">Role</label>
             <select
-              id="register-type"
+              id="register-role"
               className="form-select"
-              value={studentType}
-              onChange={handleStudentTypeChange}
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
             >
-              <option value="home">Home Student (Resident/Hosteller)</option>
-              <option value="external">External Student (Visiting/Guest)</option>
+              <option value="student">Student</option>
+              <option value="faculty">Faculty</option>
             </select>
           </div>
 
@@ -151,10 +186,9 @@ export default function RegisterPage() {
               placeholder="Enter your college name"
               value={collegeName}
               onChange={(e) => setCollegeName(e.target.value)}
-              disabled={studentType === 'home' && Boolean(homeCollegeName)}
             />
-            {studentType === 'home' && (
-              <span className="form-hint">Pre-filled with host institution name</span>
+            {Boolean(homeCollegeName) && (
+              <span className="form-hint">Host institution name</span>
             )}
           </div>
 

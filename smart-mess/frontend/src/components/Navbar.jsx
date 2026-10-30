@@ -14,10 +14,8 @@ export default function Navbar() {
   const getRoleLabel = () => {
     if (!user) return '';
     if (user.role === 'admin') return 'Kitchen Admin';
-    if (user.student_type === 'home' || user.student_type === 'internal') {
-      return 'Internal Resident';
-    }
-    return 'Visiting Student';
+    if (user.role === 'faculty') return 'Faculty';
+    return 'Student';
   };
 
   return (
@@ -36,7 +34,7 @@ export default function Navbar() {
         <div className="nav-user-meta">
           <div className="user-badge">
             <span style={{ fontWeight: 600 }}>{user.name}</span>
-            <span className={`badge-tag ${user.role === 'admin' ? 'admin' : ''}`}>
+            <span className={`badge-tag ${user.role === 'admin' ? 'admin' : user.role === 'faculty' ? 'faculty' : ''}`}>
               {getRoleLabel()}
             </span>
           </div>
@@ -48,7 +46,7 @@ export default function Navbar() {
           )}
 
           <Link to="/poll" className="btn btn-secondary btn-sm">
-            Menu Poll
+            Mess Menu
           </Link>
 
           <button onClick={handleLogout} className="btn btn-secondary btn-sm" id="logout-btn">

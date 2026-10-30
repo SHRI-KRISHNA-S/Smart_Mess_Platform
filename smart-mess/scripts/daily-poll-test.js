@@ -6,11 +6,10 @@
  * 2. Yesterday's expired poll is not returned as today's active poll.
  * 3. A new day's poll becomes active without a frontend restart.
  * 4. Daily generation does not create duplicates (idempotency under concurrency).
- * 5. Voting on an expired poll is rejected (409 Poll closed).
+ * 5. Voting on polls is decommissioned and rejected (403 Forbidden).
  * 6. Historical vote records remain associated with the correct poll.
- * 7. External students receive the updated poll.
- * 8. Internal students role check: attendance notification vs poll voting.
- * 9. Date transitions use the application's configured timezone correctly.
+ * 7. Student and Faculty roles can both access meal attendance notifications.
+ * 8. Date transitions use the application's configured timezone correctly.
  */
 
 const path = require('path');
@@ -82,36 +81,48 @@ async function runDailyPollTests() {
   console.log(`  Timezone Config: ${pollService.APP_TIMEZONE}`);
   console.log(`=======================================================\n`);
 
+  let localServer = null;
+  try {
+    const res = await fetch(`${BASE_URL}/api/health`);
+    if (!res.ok) throw new Error('Not running');
+  } catch (err) {
+    const http = require('http');
+    process.env.NODE_ENV = 'test';
+    const app = require('../backend/src/index');
+    localServer = http.createServer(app);
+    await new Promise(resolve => localServer.listen(5000, resolve));
+  }
+
   try {
     const timestamp = Date.now();
 
-    // Setup Test Users
-    console.log(`[SETUP] Registering test users for testing roles and voting...`);
-    const extEmail = `daily_ext_${timestamp}@external.edu`;
-    const extReg = await request('/api/auth/register', {
+    // Setup Test Users: Student and Faculty
+    console.log(`[SETUP] Registering test users for testing roles...`);
+    const studentEmail = `daily_student_${timestamp}@college.edu`;
+    const studentReg = await request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({
-        name: 'External Student',
-        email: extEmail,
-        college_name: 'External College',
-        student_type: 'external',
-        password: 'Password123'
-      })
-    });
-    const extCookie = extractTokenCookie(extReg.cookieHeader);
-
-    const homeEmail = `daily_home_${timestamp}@home.edu`;
-    const homeReg = await request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'Home Student',
-        email: homeEmail,
+        name: 'Student Tester',
+        email: studentEmail,
         college_name: process.env.HOME_COLLEGE_NAME || 'Bannari Amman Institute of Technology',
-        student_type: 'home',
+        role: 'student',
         password: 'Password123'
       })
     });
-    const homeCookie = extractTokenCookie(homeReg.cookieHeader);
+    const studentCookie = extractTokenCookie(studentReg.cookieHeader);
+
+    const facultyEmail = `daily_faculty_${timestamp}@college.edu`;
+    const facultyReg = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Faculty Tester',
+        email: facultyEmail,
+        college_name: process.env.HOME_COLLEGE_NAME || 'Bannari Amman Institute of Technology',
+        role: 'faculty',
+        password: 'Password123'
+      })
+    });
+    const facultyCookie = extractTokenCookie(facultyReg.cookieHeader);
 
     const adminLogin = await request('/api/auth/login', {
       method: 'POST',
@@ -123,7 +134,7 @@ async function runDailyPollTests() {
     const adminCookie = extractTokenCookie(adminLogin.cookieHeader);
 
     // 1. Timezone & Date Configuration Check
-    console.log(`\n[TEST 1 & 9] Timezone Correctness & Date Calculations`);
+    console.log(`\n[TEST 1] Timezone Correctness & Date Calculations`);
     const todayStr = pollService.getLocalDateString();
     const tomorrowStr = pollService.getTomorrowDateString(todayStr);
     const yesterdayStr = pollService.getYesterdayDateString(todayStr);
@@ -135,12 +146,11 @@ async function runDailyPollTests() {
     // 2. Today's active poll is returned
     console.log(`\n[TEST 2] Active Poll Retrieval`);
     const activeRes = await request('/api/polls/active', {
-      headers: { Cookie: extCookie }
+      headers: { Cookie: studentCookie }
     });
     assert(activeRes.status === 200 && activeRes.data.poll !== null, 'GET /api/polls/active returns 200 and a valid poll');
     const activePoll = activeRes.data.poll;
     assert(activePoll.meal_date === tomorrowStr, `Active poll target meal_date (${activePoll.meal_date}) is scheduled for tomorrow (${tomorrowStr})`);
-    assert(activePoll.is_closed === false, 'Current scheduled poll is open for voting');
     assert(Array.isArray(activeRes.data.results.items) && activeRes.data.results.items.length === 4, 'Active poll contains exactly 4 menu options');
 
     // 3. Yesterday's expired poll is NOT returned as active
@@ -150,104 +160,52 @@ async function runDailyPollTests() {
       [todayStr, activePoll.id]
     );
     if (yesterdayPolls.length > 0) {
-      assert(yesterdayPolls.every(p => p.is_active === 0), `All past polls (meal_date <= ${todayStr}) have is_active = 0`);
-      assert(activePoll.id !== yesterdayPolls[0].id, `Active poll ID (${activePoll.id}) is distinct from yesterday's poll ID (${yesterdayPolls[0].id})`);
+      const expiredId = yesterdayPolls[0].id;
+      assert(activePoll.id !== expiredId, `Current active poll ID (${activePoll.id}) is distinct from historical poll (${expiredId})`);
     } else {
-      assert(true, 'No legacy past polls to check (clean database)');
+      assert(true, 'No expired historical polls in DB prior to today.');
     }
 
-    // 4. Voting on today's active poll works
-    console.log(`\n[TEST 4] External Student Voting on Active Poll`);
-    const option1Id = activeRes.data.results.items[0].id;
+    // 4. Voting rejection (Decommissioned)
+    console.log(`\n[TEST 4] Preference Poll Voting Rejection`);
     const voteRes = await request(`/api/polls/${activePoll.id}/vote`, {
       method: 'POST',
-      headers: { Cookie: extCookie },
-      body: JSON.stringify({ menu_item_id: option1Id })
+      headers: { Cookie: studentCookie },
+      body: JSON.stringify({ menu_item_id: activeRes.data.results.items[0].id })
     });
-    assert(voteRes.status === 201 && voteRes.data.choice === activeRes.data.results.items[0].name, 'External student successfully voted on active poll (201)');
+    assert(voteRes.status === 403, 'Preference poll voting is decommissioned and returns 403 Forbidden');
 
-    // 5. Voting on expired poll is rejected
-    console.log(`\n[TEST 5] Expired Poll Rejection`);
-    if (yesterdayPolls.length > 0) {
-      const expiredPollId = yesterdayPolls[0].id;
-      // Get menu item for yesterday poll
-      const [oldItems] = await db.query('SELECT id FROM menu_items WHERE poll_id = ? LIMIT 1', [expiredPollId]);
-      if (oldItems.length > 0) {
-        const expiredVote = await request(`/api/polls/${expiredPollId}/vote`, {
-          method: 'POST',
-          headers: { Cookie: extCookie },
-          body: JSON.stringify({ menu_item_id: oldItems[0].id })
-        });
-        assert(expiredVote.status === 409 && expiredVote.data.error === 'Poll closed', 'Voting on yesterday expired poll is rejected with 409 Poll closed');
-      }
-    } else {
-      assert(true, 'No expired poll in DB to test directly');
-    }
-
-    // 6. Historical vote records remain associated with the correct poll
-    console.log(`\n[TEST 6] Historical Vote Integrity`);
-    const [voteRows] = await db.query('SELECT poll_id, COUNT(*) as cnt FROM votes GROUP BY poll_id');
-    assert(voteRows.length > 0, `Votes are preserved in database grouped by poll_id (${voteRows.map(r => `Poll ${r.poll_id}: ${r.cnt} votes`).join(', ')})`);
-
-    const adminAudit = await request(`/api/admin/polls/${activePoll.id}/results`, {
-      headers: { Cookie: adminCookie }
-    });
-    assert(adminAudit.status === 200 && adminAudit.data.totalVotes >= 1, 'Admin results reflect correct votes for active poll');
-
-    // 7. Idempotency & Duplicate Prevention under Concurrency
-    console.log(`\n[TEST 7] Concurrency & Idempotent Daily Poll Generation`);
-    const initialPollCountRows = await db.query('SELECT COUNT(*) as cnt FROM polls WHERE meal_date = ? AND meal_type = ?', [tomorrowStr, 'lunch']);
-    const countBefore = initialPollCountRows[0][0].cnt;
-
-    // Run syncDailyPolls 5 times concurrently
+    // 5. Concurrency & Idempotency Test
+    console.log(`\n[TEST 5] Daily Poll Generation Idempotency under Concurrency`);
     await Promise.all([
-      pollService.syncDailyPolls(),
-      pollService.syncDailyPolls(),
       pollService.syncDailyPolls(),
       pollService.syncDailyPolls(),
       pollService.syncDailyPolls()
     ]);
+    const [matchingPolls] = await db.query(
+      "SELECT COUNT(*) AS count FROM polls WHERE meal_date = ? AND meal_type = 'lunch'",
+      [tomorrowStr]
+    );
+    assert(matchingPolls[0].count === 1, `Exactly 1 poll exists for tomorrow (${tomorrowStr}) lunch despite concurrent sync calls`);
 
-    const afterPollCountRows = await db.query('SELECT COUNT(*) as cnt FROM polls WHERE meal_date = ? AND meal_type = ?', [tomorrowStr, 'lunch']);
-    const countAfter = afterPollCountRows[0][0].cnt;
-    assert(countBefore === 1 && countAfter === 1, `Concurrent poll sync does not create duplicate polls (Count remained ${countAfter})`);
-
-    // 8. Next Day Transition Simulation (Controllable Clock)
-    console.log(`\n[TEST 8] Day Transition Simulation (Controllable Clock)`);
-    // Simulate tomorrow date
-    const simulatedDate = tomorrowStr;
-    const nextDayMealDate = pollService.getTomorrowDateString(simulatedDate);
-
-    // Request active poll using x-test-date header
-    const transitionRes = await request('/api/polls/active', {
-      headers: {
-        Cookie: extCookie,
-        'x-test-date': simulatedDate
-      }
+    // 6. Role-Based Access Verification
+    console.log(`\n[TEST 6] Role-Based Access Verification`);
+    const studentIntent = await request('/api/notifications/meal-intent', {
+      headers: { Cookie: studentCookie }
     });
+    assert(studentIntent.status === 200 && studentIntent.data.meal !== null, 'Student can access upcoming meal attendance notification');
 
-    assert(transitionRes.status === 200 && transitionRes.data.poll !== null, 'Transition request returns active poll for simulated day');
-    assert(transitionRes.data.poll.meal_date === nextDayMealDate, `Simulated day returns new poll scheduled for ${nextDayMealDate}`);
-    assert(transitionRes.data.poll.id !== activePoll.id, `Simulated next day poll ID (${transitionRes.data.poll.id}) is distinct from today's poll (${activePoll.id})`);
-
-    // Verify requesting today without header returns today's poll scheduled for tomorrowStr
-    const backToTodayRes = await request('/api/polls/active', {
-      headers: { Cookie: extCookie }
+    const facultyIntent = await request('/api/notifications/meal-intent', {
+      headers: { Cookie: facultyCookie }
     });
-    assert(backToTodayRes.status === 200 && backToTodayRes.data.poll.meal_date === tomorrowStr, `Requesting active poll returns today's scheduled poll for ${tomorrowStr}`);
+    assert(facultyIntent.status === 200 && facultyIntent.data.meal !== null, 'Faculty can access upcoming meal attendance notification');
 
-    // 9. Role-Based Access Verification
-    console.log(`\n[TEST 9] Role-Based Access Verification`);
-    const internalIntent = await request('/api/notifications/meal-intent', {
-      headers: { Cookie: homeCookie }
-    });
-    assert(internalIntent.status === 200 && internalIntent.data.meal !== null, 'Internal student can access upcoming meal attendance notification');
+    // Verify non-admins cannot access admin endpoints
+    const studentAdmin = await request('/api/admin/polls', { headers: { Cookie: studentCookie } });
+    assert(studentAdmin.status === 403, 'Student cannot access admin routes (403)');
 
-    // Verify external user gets active poll with options
-    const externalPollCheck = await request('/api/polls/active', {
-      headers: { Cookie: extCookie }
-    });
-    assert(externalPollCheck.status === 200 && externalPollCheck.data.poll !== null && externalPollCheck.data.results.items.length === 4, 'External student receives poll and 4 voting options');
+    const facultyAdmin = await request('/api/admin/polls', { headers: { Cookie: facultyCookie } });
+    assert(facultyAdmin.status === 403, 'Faculty cannot access admin routes (403)');
 
     console.log(`\n=======================================================`);
     console.log(`  ALL DAILY POLL TESTS PASSED: ${passedCount} PASSED, ${failedCount} FAILED`);

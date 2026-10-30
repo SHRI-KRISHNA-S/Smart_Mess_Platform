@@ -1,0 +1,70 @@
+{
+  "original_baseline": {
+    "model_version": "v2.0.0",
+    "dataset_records": 155,
+    "train_records": 124,
+    "test_records": 31,
+    "train_metrics": {
+      "mae": 2.1061,
+      "rmse": 3.1489,
+      "r2": 0.8594
+    },
+    "test_metrics": {
+      "mae": 3.8766,
+      "rmse": 4.654,
+      "r2": -0.0365
+    },
+    "cv_mae": 5.7284,
+    "generalization_gap": 0.8959
+  },
+  "expanded_experiment": {
+    "model_version": "v3.0.0-exp",
+    "dataset_records": 215,
+    "train_records": 172,
+    "test_records": 43,
+    "hyperparameters": {
+      "n_estimators": 300,
+      "min_samples_split": 5,
+      "min_samples_leaf": 1,
+      "max_features": "sqrt",
+      "max_depth": 3
+    },
+    "train_metrics": {
+      "mae": 4.123,
+      "rmse": 5.3937,
+      "r2": 0.5228
+    },
+    "test_metrics": {
+      "mae": 4.5265,
+      "rmse": 5.4256,
+      "r2": -0.3025
+    },
+    "cv_mae": 5.654,
+    "generalization_gap": 0.8253,
+    "evaluated_on_orig_test": {
+      "mae": 4.7043,
+      "rmse": 5.6385,
+      "r2": -0.5213
+    },
+    "feature_importances": {
+      "food_prepared_kg": 0.3865,
+      "total_students": 0.2945,
+      "past_wastage_kg": 0.1193,
+      "rolling_avg_wastage_3d": 0.1021,
+      "day_of_week": 0.0667,
+      "month": 0.031
+    }
+  },
+  "cross_institution_transfer": {
+    "finland_to_latvia": {
+      "mae": 4.7033,
+      "rmse": 5.8609,
+      "r2": -0.7407
+    },
+    "latvia_to_finland": {
+      "mae": 5.7413,
+      "rmse": 8.131,
+      "r2": -0.0017
+    }
+  }
+}

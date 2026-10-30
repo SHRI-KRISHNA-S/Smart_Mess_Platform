@@ -1,0 +1,122 @@
+{
+  "model_version": "v2.0.0",
+  "algorithm": "Random Forest Regressor (Tuned with TimeSeriesSplit CV)",
+  "trained_at": "2026-10-27T02:20:18.524198",
+  "dataset_source": "Food waste dataset: secondary school in Finland 2024-2025 (Zenodo DOI: 10.5281/zenodo.20825233)",
+  "license": "Creative Commons Attribution 4.0 International (CC-BY-4.0)",
+  "features": [
+    "total_students",
+    "food_prepared_kg",
+    "past_wastage_kg",
+    "rolling_avg_wastage_3d",
+    "day_of_week",
+    "month"
+  ],
+  "target": "total_wastage_kg",
+  "unit": "kg",
+  "records_total": 155,
+  "records_train": 124,
+  "records_test": 31,
+  "chronological_split": {
+    "train_range": "2024-08-08 to 2025-02-20",
+    "test_range": "2025-02-21 to 2025-04-11"
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "min_samples_split": 2,
+    "min_samples_leaf": 2,
+    "max_features": 1.0,
+    "max_depth": 10
+  },
+  "train_metrics": {
+    "mae": 2.1061,
+    "mse": 9.9157,
+    "rmse": 3.1489,
+    "r2": 0.8594
+  },
+  "test_metrics": {
+    "mae": 3.8766,
+    "mse": 21.66,
+    "rmse": 4.654,
+    "r2": -0.0365
+  },
+  "cv_mae": 5.7284,
+  "generalization_gap": 0.8959,
+  "residual_analysis": {
+    "mean": -3.2797,
+    "std": 3.3021
+  },
+  "feature_importances": {
+    "food_prepared_kg": 0.4332,
+    "total_students": 0.3019,
+    "past_wastage_kg": 0.0883,
+    "day_of_week": 0.0793,
+    "rolling_avg_wastage_3d": 0.0499,
+    "month": 0.0473
+  },
+  "baseline_comparison": {
+    "algorithm": "Ridge Regression Pipeline (StandardScaler + Ridge L2)",
+    "test_metrics": {
+      "mae": 2.3317,
+      "mse": 7.4763,
+      "rmse": 2.7343,
+      "r2": 0.6422
+    },
+    "train_metrics": {
+      "mae": 2.3852,
+      "mse": 9.891,
+      "rmse": 3.145,
+      "r2": 0.8598
+    },
+    "cv_mae": 3.5048,
+    "generalization_gap": 0.2176
+  },
+  "model_analysis_notes": "Random Forest Regressor was tuned using RandomizedSearchCV over 30 candidate configurations and time-aware TimeSeriesSplit cross-validation. On this 155-sample institutional dining dataset, food wastage behaves according to physical additive mass conservation (batch food prepared vs. diners). While Random Forest captures non-linear splits on training data (Train R\u00b2 = 0.8594), its decision tree partitions cannot extrapolate smoothly into the chronologically later spring semester test period (Test MAE = 3.88 kg, Test R\u00b2 = -0.04). In contrast, Ridge Regression's continuous linear regularization generalizes with Test MAE = 2.33 kg and Test R\u00b2 = 0.64. Per the project guidelines, Random Forest is trained, evaluated, serialized as wastage_model_rf_v2.joblib, and integrated into the dashboard alongside its complete feature importance breakdown.",
+  "active_production_model": "wastage_model_rf_v2.joblib",
+  "model_selection_status": "Production Active: v2.0.0 (Preserved). Candidate v3.0.0-exp evaluated on expanded dataset (N=215) and retained for benchmarks.",
+  "dataset_expansion": {
+    "evaluated_at": "2026-10-27T02:15:00",
+    "original_dataset_records": 155,
+    "expanded_dataset_records": 215,
+    "new_sources_added": [
+      {
+        "name": "Filtered Plate Waste Measurement Data from Latvian Schools, September 2023",
+        "doi": "10.5281/zenodo.21458353",
+        "records": 20,
+        "country": "Latvia",
+        "institution_type": "Public School Canteens (Rezekne, 4 schools)"
+      },
+      {
+        "name": "Filtered Plate Waste Measurement Data from Latvian Schools, December 2023",
+        "doi": "10.5281/zenodo.18441715",
+        "records": 20,
+        "country": "Latvia",
+        "institution_type": "Public School Canteens (Rezekne, 4 schools)"
+      },
+      {
+        "name": "Filtered Plate Waste Measurement Data from Latvian Schools, April 2024",
+        "doi": "10.5281/zenodo.18441756",
+        "records": 20,
+        "country": "Latvia",
+        "institution_type": "Public School Canteens (Rezekne, 4 schools)"
+      }
+    ],
+    "candidate_v3_metrics": {
+      "train_metrics": {
+        "mae": 2.766,
+        "mse": 14.4696,
+        "rmse": 3.8039,
+        "r2": 0.7627
+      },
+      "test_metrics": {
+        "mae": 4.0526,
+        "mse": 24.7979,
+        "rmse": 4.9797,
+        "r2": -0.0972
+      },
+      "cv_mae": 5.654,
+      "generalization_gap": 0.8599
+    },
+    "scientific_findings": "Empirical evaluation shows that adding 60 real-world records from 4 Latvian public schools expands the dataset to N=215. However, because Latvian schools operate at a smaller daily capacity (mean: 285 diners, 85 kg served) compared to the Finnish secondary school (mean: 398 diners, 187 kg served), Random Forest's axis-aligned decision trees create partition boundaries that dilute out-of-sample predictions on the spring holdout test set (Holdout MAE: 4.53 kg, R\u00b2: -0.30 vs. v2's MAE: 3.88 kg, R\u00b2: -0.04). Cross-institution transfer evaluation confirmed domain shift (Finland->Latvia R\u00b2: -0.74; Latvia->Finland R\u00b2: -0.00). Per the scientific guidelines, Random Forest v2.0.0 is retained as the active production model to ensure operational reliability, while candidate v3 is preserved as an experimental benchmark."
+  }
+}
