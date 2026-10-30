@@ -1,4 +1,4 @@
-const UPSTREAM_HOST = 'bitcentral-v2.onrender.com';
+const UPSTREAM_HOST = process.env.BITCENTRAL_UPSTREAM_HOST || 'bitcentral-v2-dgvs.onrender.com';
 const UPSTREAM_PATH = '/mess';
 const UPSTREAM_BASE = `https://${UPSTREAM_HOST}${UPSTREAM_PATH}`;
 const REQUEST_TIMEOUT_MS = 6000;
