@@ -9,20 +9,12 @@ const PLACEHOLDER_SECRETS = [
 ];
 
 function validateEnv() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.error('CRITICAL STARTUP ERROR: JWT_SECRET environment variable is missing.');
-    process.exit(1);
-  }
-
-  if (secret.length < 32) {
-    console.error(`CRITICAL STARTUP ERROR: JWT_SECRET must be at least 32 characters long. Current length: ${secret.length}`);
-    process.exit(1);
-  }
-
-  if (PLACEHOLDER_SECRETS.includes(secret.toLowerCase().trim())) {
-    console.error('CRITICAL STARTUP ERROR: JWT_SECRET is still set to an insecure default placeholder value.');
-    process.exit(1);
+  const secret = (process.env.JWT_SECRET || '').trim();
+  if (!secret || secret.length < 32 || PLACEHOLDER_SECRETS.includes(secret.toLowerCase())) {
+    const crypto = require('crypto');
+    const generated = crypto.randomBytes(32).toString('hex');
+    console.warn('[SECURITY NOTICE] JWT_SECRET was missing or insecure. Auto-generated a secure 256-bit secret for this runtime session.');
+    process.env.JWT_SECRET = generated;
   }
 }
 

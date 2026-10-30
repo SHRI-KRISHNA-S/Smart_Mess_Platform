@@ -39,17 +39,18 @@ function getPoolConfig() {
       config.host.includes('tidbcloud.com') ||
       config.host.includes('aivencloud.com') ||
       config.host.includes('clever-cloud.com')
-    ));
+    )) ||
+    (databaseUrl && (databaseUrl.includes('ssl=') || databaseUrl.includes('sslmode=require')));
 
   if (needsSsl) {
     config.ssl = {
       minVersion: 'TLSv1.2',
-      rejectUnauthorized: true
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false'
     };
   }
 
-  // TiDB Cloud 'sys' is an internal MySQL database; use 'test' for application data
-  if (config.database === 'sys') {
+  // TiDB Cloud 'sys' is an internal MySQL database; use 'test' or 'smart_mess_db' for application data
+  if (!config.database || config.database === 'sys') {
     config.database = 'test';
   }
 

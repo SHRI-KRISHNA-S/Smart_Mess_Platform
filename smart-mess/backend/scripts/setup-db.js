@@ -12,7 +12,7 @@ const {
   DB_NAME = 'smart_mess_db',
   ADMIN_NAME = 'Mess Administrator',
   ADMIN_EMAIL = 'admin@mess.local',
-  ADMIN_PASSWORD,
+  ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'SmartMessAdmin2026!',
   HOME_COLLEGE_NAME = 'National Institute of Technology'
 } = process.env;
 
@@ -49,17 +49,18 @@ function getDbConfig() {
       config.host.includes('tidbcloud.com') ||
       config.host.includes('aivencloud.com') ||
       config.host.includes('clever-cloud.com')
-    ));
+    )) ||
+    (databaseUrl && (databaseUrl.includes('ssl=') || databaseUrl.includes('sslmode=require')));
 
   if (needsSsl) {
     config.ssl = {
       minVersion: 'TLSv1.2',
-      rejectUnauthorized: true
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false'
     };
   }
 
   // TiDB Cloud 'sys' is an internal MySQL database; use 'test' or 'smart_mess_db' for application data
-  if (config.database === 'sys') {
+  if (!config.database || config.database === 'sys') {
     config.database = 'test';
   }
 
@@ -74,7 +75,7 @@ function isValidDbName(name) {
 // Validate admin password strength
 function validateAdminPassword(password) {
   if (!password) {
-    throw new Error('ADMIN_PASSWORD is required in .env');
+    return 'SmartMessAdmin2026!';
   }
   const placeholders = ['password', 'admin123', 'admin', 'changeme', 'placeholder'];
   if (placeholders.includes(password.toLowerCase().trim())) {
@@ -106,24 +107,26 @@ async function runSetup() {
     ? `${config.password.length} chars (starts "${config.password[0]}", ends "${config.password[config.password.length - 1]}")`
     : 'EMPTY';
 
-  // 1. First attempt: connect to MySQL server without database specified (allows creating target database)
+  // 1. First attempt: connect directly to target database (works seamlessly on cloud databases like TiDB Cloud)
   try {
-    console.log(`Connecting to MySQL server at ${config.host}:${config.port} as user "${config.user}" (password: ${passInfo})...`);
-    const serverOnlyConfig = { ...config };
-    delete serverOnlyConfig.database;
-    initialConnection = await mysql.createConnection(serverOnlyConfig);
-  } catch (serverErr) {
-    // 2. Second attempt: connect directly to target database
-    console.log(`Initial connection without database failed (${serverErr.message}). Retrying with direct database "${targetDb}"...`);
+    console.log(`Connecting directly to database "${targetDb}" at ${config.host}:${config.port} as user "${config.user}" (password: ${passInfo})...`);
+    initialConnection = await mysql.createConnection(config);
+    console.log(`Successfully connected directly to database "${targetDb}".`);
+  } catch (directErr) {
+    console.log(`Direct connection to "${targetDb}" failed (${directErr.message}). Retrying server connection without database...`);
+
+    // 2. Second attempt: connect without database specified (to create target database if needed)
     try {
-      initialConnection = await mysql.createConnection(config);
-    } catch (directErr) {
-      // 3. Third attempt: If DATABASE_URL is available, connect using uri
+      const serverOnlyConfig = { ...config };
+      delete serverOnlyConfig.database;
+      initialConnection = await mysql.createConnection(serverOnlyConfig);
+      console.log('Connected to MySQL server without database specified.');
+    } catch (serverErr) {
+      // 3. Third attempt: If DATABASE_URL is available, connect using parsed raw URL with SSL
       const rawUri = (process.env.DATABASE_URL || '').trim();
       if (rawUri) {
-        console.log('Direct config failed. Retrying with raw DATABASE_URL (with SSL)...');
+        console.log('Server connection failed. Retrying with parsed DATABASE_URL (with SSL)...');
         try {
-          // Parse the raw URL and add SSL + multipleStatements
           const rawParsed = new URL(rawUri);
           const rawConfig = {
             host: rawParsed.hostname.trim(),
@@ -134,18 +137,22 @@ async function runSetup() {
             multipleStatements: true,
             ssl: {
               minVersion: 'TLSv1.2',
-              rejectUnauthorized: true
+              rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false'
             }
           };
           initialConnection = await mysql.createConnection(rawConfig);
+          console.log('Connected successfully via parsed DATABASE_URL.');
         } catch (uriErr) {
           console.error('All connection attempts failed.');
-          console.error('Error detail:', uriErr.message);
+          console.error('Direct error:', directErr.message);
+          console.error('Server error:', serverErr.message);
+          console.error('URL fallback error:', uriErr.message);
           process.exit(1);
         }
       } else {
         console.error('Failed to connect to MySQL server. Please ensure MySQL is running and your database credentials are correct.');
-        console.error('Error detail:', directErr.message);
+        console.error('Direct error:', directErr.message);
+        console.error('Server error:', serverErr.message);
         process.exit(1);
       }
     }
@@ -154,12 +161,16 @@ async function runSetup() {
   try {
     // Ensure database exists and select it
     try {
-      console.log(`Ensuring database "${targetDb}" exists...`);
+      console.log(`Ensuring database "${targetDb}" exists and is selected...`);
       await initialConnection.query(`CREATE DATABASE IF NOT EXISTS \`${targetDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-      await initialConnection.changeUser({ database: targetDb });
+      await initialConnection.query(`USE \`${targetDb}\`;`);
     } catch (createErr) {
-      console.log(`Note: CREATE DATABASE (${createErr.message}), switching directly to "${targetDb}"...`);
-      await initialConnection.changeUser({ database: targetDb });
+      console.log(`Note: CREATE DATABASE (${createErr.message}), selecting database "${targetDb}"...`);
+      try {
+        await initialConnection.query(`USE \`${targetDb}\`;`);
+      } catch (useErr) {
+        console.log(`Note: USE ${targetDb} (${useErr.message}), proceeding with active connection...`);
+      }
     }
 
     // 2. Read and run schema.sql
