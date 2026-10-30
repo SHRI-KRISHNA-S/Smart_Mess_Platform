@@ -17,24 +17,24 @@ const {
 } = process.env;
 
 function getDbConfig() {
-  const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const databaseUrl = (process.env.DATABASE_URL || process.env.MYSQL_URL || '').trim();
   const config = {
-    host: DB_HOST,
-    port: Number(DB_PORT),
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_NAME,
+    host: String(process.env.DB_HOST || DB_HOST || '127.0.0.1').trim(),
+    port: Number(process.env.DB_PORT || DB_PORT || 3306),
+    user: String(process.env.DB_USER || DB_USER || 'root').trim(),
+    password: String(process.env.DB_PASSWORD || DB_PASSWORD || '').trim(),
+    database: String(process.env.DB_NAME || DB_NAME || 'smart_mess_db').trim(),
     multipleStatements: true
   };
 
   if (databaseUrl) {
     try {
       const parsed = new URL(databaseUrl);
-      config.host = parsed.hostname;
+      config.host = parsed.hostname.trim();
       config.port = Number(parsed.port) || 3306;
-      config.user = decodeURIComponent(parsed.username);
-      config.password = decodeURIComponent(parsed.password);
-      const dbFromPath = parsed.pathname.replace(/^\//, '');
+      config.user = decodeURIComponent(parsed.username).trim();
+      config.password = decodeURIComponent(parsed.password).trim();
+      const dbFromPath = parsed.pathname.replace(/^\//, '').trim();
       if (dbFromPath) {
         config.database = dbFromPath;
       }
@@ -102,22 +102,38 @@ async function runSetup() {
 
   let initialConnection;
   const targetDb = config.database || 'smart_mess_db';
+  const passInfo = config.password
+    ? `${config.password.length} chars (starts "${config.password[0]}", ends "${config.password[config.password.length - 1]}")`
+    : 'EMPTY';
 
   // 1. First attempt: connect to MySQL server without database specified (allows creating target database)
   try {
-    console.log(`Connecting to MySQL server at ${config.host}:${config.port} as user "${config.user}"...`);
+    console.log(`Connecting to MySQL server at ${config.host}:${config.port} as user "${config.user}" (password: ${passInfo})...`);
     const serverOnlyConfig = { ...config };
     delete serverOnlyConfig.database;
     initialConnection = await mysql.createConnection(serverOnlyConfig);
   } catch (serverErr) {
-    // 2. Second attempt: connect directly to target database (in case server restricts non-db connections)
+    // 2. Second attempt: connect directly to target database
     console.log(`Initial connection without database failed (${serverErr.message}). Retrying with direct database "${targetDb}"...`);
     try {
       initialConnection = await mysql.createConnection(config);
     } catch (directErr) {
-      console.error('Failed to connect to MySQL server. Please ensure MySQL is running and your database credentials are correct.');
-      console.error('Error detail:', directErr.message);
-      process.exit(1);
+      // 3. Third attempt: If DATABASE_URL is available, connect using uri
+      const rawUri = (process.env.DATABASE_URL || '').trim();
+      if (rawUri) {
+        console.log('Direct config failed. Retrying directly with raw DATABASE_URL...');
+        try {
+          initialConnection = await mysql.createConnection(rawUri);
+        } catch (uriErr) {
+          console.error('All connection attempts failed.');
+          console.error('Error detail:', uriErr.message);
+          process.exit(1);
+        }
+      } else {
+        console.error('Failed to connect to MySQL server. Please ensure MySQL is running and your database credentials are correct.');
+        console.error('Error detail:', directErr.message);
+        process.exit(1);
+      }
     }
   }
 

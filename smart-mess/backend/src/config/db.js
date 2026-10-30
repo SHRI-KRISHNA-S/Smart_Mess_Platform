@@ -12,13 +12,13 @@ const {
 let pool = null;
 
 function getPoolConfig() {
-  const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const databaseUrl = (process.env.DATABASE_URL || process.env.MYSQL_URL || '').trim();
   const config = {
-    host: process.env.DB_HOST || '127.0.0.1',
+    host: String(process.env.DB_HOST || '127.0.0.1').trim(),
     port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'smart_mess_db',
+    user: String(process.env.DB_USER || 'root').trim(),
+    password: String(process.env.DB_PASSWORD || '').trim(),
+    database: String(process.env.DB_NAME || 'smart_mess_db').trim(),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -29,11 +29,11 @@ function getPoolConfig() {
   if (databaseUrl) {
     try {
       const parsed = new URL(databaseUrl);
-      config.host = parsed.hostname;
+      config.host = parsed.hostname.trim();
       config.port = Number(parsed.port) || 3306;
-      config.user = decodeURIComponent(parsed.username);
-      config.password = decodeURIComponent(parsed.password);
-      const dbFromPath = parsed.pathname.replace(/^\//, '');
+      config.user = decodeURIComponent(parsed.username).trim();
+      config.password = decodeURIComponent(parsed.password).trim();
+      const dbFromPath = parsed.pathname.replace(/^\//, '').trim();
       if (dbFromPath) {
         config.database = dbFromPath;
       }
