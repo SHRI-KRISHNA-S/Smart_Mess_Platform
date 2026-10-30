@@ -54,8 +54,13 @@ function getPoolConfig() {
   if (needsSsl) {
     config.ssl = {
       minVersion: 'TLSv1.2',
-      rejectUnauthorized: process.env.DB_SSL_STRICT === 'true'
+      rejectUnauthorized: true
     };
+  }
+
+  // TiDB Cloud 'sys' is an internal MySQL database; use 'test' or 'smart_mess_db' for application data
+  if (config.database === 'sys') {
+    config.database = 'test';
   }
 
   return config;
