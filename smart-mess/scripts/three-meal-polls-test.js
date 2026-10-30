@@ -60,6 +60,7 @@ async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    'x-test-time': '12:00:00',
     ...(options.headers || {})
   };
 

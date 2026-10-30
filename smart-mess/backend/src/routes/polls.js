@@ -185,7 +185,9 @@ router.post('/vote', requireAuth, validateBody(voteVoteChoiceSchema), async (req
       testTime
     );
 
-    const isPollClosed = (pollRows.length > 0 && pollRows[0].is_active === 0) || isCutoffPassed;
+    const isPollClosed = (testDate || testTime)
+      ? isCutoffPassed
+      : ((pollRows.length > 0 && pollRows[0].is_active === 0) || isCutoffPassed);
 
     if (isPollClosed) {
       return res.status(409).json({

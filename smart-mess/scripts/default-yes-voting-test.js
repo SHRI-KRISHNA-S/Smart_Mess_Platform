@@ -67,6 +67,7 @@ async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    'x-test-time': '12:00:00',
     ...(options.headers || {})
   };
 
@@ -177,11 +178,12 @@ async function runTestSuite() {
     });
     const cookieAdmin = extractTokenCookie(adminLogin.cookieHeader);
 
-    // Ensure daily polls synced
-    await pollService.syncDailyPolls();
+    // Ensure daily polls synced for daytime testing
     const todayStr = pollService.getLocalDateString();
+    await pollService.syncDailyPolls(todayStr, '12:00:00');
     const targetMealDate = pollService.getTomorrowDateString(todayStr);
     const targetMealType = 'lunch';
+    await db.execute('UPDATE polls SET is_active = 1 WHERE meal_date = ? AND meal_type = ?', [targetMealDate, targetMealType]);
 
     // -------------------------------------------------------------
     // SCENARIO 1: No database response: logical default is YES, hasVoted: false

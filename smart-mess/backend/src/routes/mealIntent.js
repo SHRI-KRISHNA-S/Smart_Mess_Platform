@@ -21,13 +21,14 @@ const mealIntentSchema = z.object({
 });
 
 // Helper: Determine the upcoming meal details and cutoff timestamp
-async function getUpcomingMealInfo(dateOverride = null) {
+async function getUpcomingMealInfo(dateOverride = null, timeOverride = null) {
   // Sync and fetch active poll first
   const activePoll = await pollService.getActivePoll(dateOverride);
 
   let targetDate;
   let targetType;
   let cutoffDate;
+  let isClosed = false;
 
   if (activePoll) {
     targetDate = typeof activePoll.meal_date === 'string'
@@ -35,29 +36,19 @@ async function getUpcomingMealInfo(dateOverride = null) {
       : pollService.getLocalDateString(new Date(activePoll.meal_date));
     targetType = activePoll.meal_type;
 
-    if (activePoll.closes_at) {
-      cutoffDate = new Date(activePoll.closes_at);
-    } else {
-      // Default: end of the day before the meal (23:59:59)
-      const mealD = new Date(`${targetDate}T00:00:00`);
-      mealD.setDate(mealD.getDate() - 1);
-      mealD.setHours(23, 59, 59, 999);
-      cutoffDate = mealD;
-    }
+    isClosed = pollService.isMealPollClosed(targetDate, targetType, activePoll.closes_at, dateOverride, timeOverride);
+    cutoffDate = activePoll.closes_at ? new Date(activePoll.closes_at) : new Date(pollService.getMealDeadline(targetDate, targetType));
   } else {
     // Fallback: tomorrow lunch
     const todayStr = dateOverride || pollService.getLocalDateString();
     targetDate = pollService.getTomorrowDateString(todayStr);
     targetType = 'lunch';
 
-    const mealD = new Date(`${targetDate}T00:00:00`);
-    mealD.setDate(mealD.getDate() - 1);
-    mealD.setHours(23, 59, 59, 999);
-    cutoffDate = mealD;
+    isClosed = pollService.isMealPollClosed(targetDate, targetType, null, dateOverride, timeOverride);
+    cutoffDate = new Date(pollService.getMealDeadline(targetDate, targetType));
   }
 
-  const now = new Date();
-  const canChange = now <= cutoffDate;
+  const canChange = !isClosed;
 
   return {
     date: targetDate,
@@ -72,7 +63,8 @@ async function getUpcomingMealInfo(dateOverride = null) {
 router.get('/notifications/meal-intent', requireAuth, async (req, res, next) => {
   try {
     const testDate = req.headers['x-test-date'] || (req.query.test_date && process.env.NODE_ENV !== 'production' ? req.query.test_date : null);
-    const upcoming = await getUpcomingMealInfo(testDate);
+    const testTime = req.headers['x-test-time'] || (req.query.test_time && process.env.NODE_ENV !== 'production' ? req.query.test_time : null);
+    const upcoming = await getUpcomingMealInfo(testDate, testTime);
     const userId = req.user.id;
 
     const [responses] = await db.query(
@@ -111,7 +103,8 @@ router.put('/meal-intent', requireAuth, validateBody(mealIntentSchema), async (r
     const userId = req.user.id;
 
     const testDate = req.headers['x-test-date'] || (req.query.test_date && process.env.NODE_ENV !== 'production' ? req.query.test_date : null);
-    const upcoming = await getUpcomingMealInfo(testDate);
+    const testTime = req.headers['x-test-time'] || (req.query.test_time && process.env.NODE_ENV !== 'production' ? req.query.test_time : null);
+    const upcoming = await getUpcomingMealInfo(testDate, testTime);
 
     // Verify this is for the upcoming meal
     if (mealDate !== upcoming.date || mealType !== upcoming.type) {

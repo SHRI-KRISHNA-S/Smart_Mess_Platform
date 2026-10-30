@@ -211,8 +211,8 @@ function formatDeadlineDisplay(deadlineStr, mealType) {
  */
 function isMealPollClosed(mealDate, mealType, closesAt = null, dateOverride = null, timeOverride = null) {
   const deadlineStr = closesAt || getMealDeadline(mealDate, mealType);
-  const nowLocalStr = dateOverride
-    ? `${dateOverride} ${timeOverride || '12:00:00'}`
+  const nowLocalStr = (dateOverride || timeOverride)
+    ? `${dateOverride || getLocalDateString(new Date(), APP_TIMEZONE)} ${timeOverride || '12:00:00'}`
     : getLocalTimestampString(new Date(), APP_TIMEZONE);
   return nowLocalStr >= deadlineStr;
 }
@@ -308,8 +308,8 @@ async function syncDailyPolls(dateOverride = null, timeOverride = null) {
   try {
     const todayStr = dateOverride || getLocalDateString(new Date(), APP_TIMEZONE);
     const targetMealDate = getTomorrowDateString(todayStr);
-    const nowLocalStr = dateOverride
-      ? `${dateOverride} ${timeOverride || '12:00:00'}`
+    const nowLocalStr = (dateOverride || timeOverride)
+      ? `${dateOverride || todayStr} ${timeOverride || '12:00:00'}`
       : getLocalTimestampString(new Date(), APP_TIMEZONE);
 
     // 1. Deactivate outdated polls whose cutoff has passed or meal_date is in past
@@ -466,8 +466,8 @@ async function getThreeMealPolls(dateOverride = null, timeOverride = null, userI
 
   const todayStr = dateOverride || getLocalDateString(new Date(), APP_TIMEZONE);
   const targetMealDate = getTomorrowDateString(todayStr);
-  const nowLocalStr = dateOverride
-    ? `${dateOverride} ${timeOverride || '12:00:00'}`
+  const nowLocalStr = (dateOverride || timeOverride)
+    ? `${dateOverride || todayStr} ${timeOverride || '12:00:00'}`
     : getLocalTimestampString(new Date(), APP_TIMEZONE);
 
   const mealTypes = ['breakfast', 'lunch', 'dinner'];

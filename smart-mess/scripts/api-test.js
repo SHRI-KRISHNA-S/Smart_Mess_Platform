@@ -67,6 +67,7 @@ async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    'x-test-time': '12:00:00',
     ...(options.headers || {})
   };
 
@@ -93,6 +94,18 @@ async function runTestSuite() {
   console.log(`  RUNNING AUTOMATED API TEST SUITE (Smart Mess API)`);
   console.log(`  Target: ${BASE_URL}`);
   console.log(`=======================================================\n`);
+
+  let localServer = null;
+  try {
+    const res = await fetch(`${BASE_URL}/api/health`);
+    if (!res.ok) throw new Error('Not running');
+  } catch (err) {
+    const http = require('http');
+    process.env.NODE_ENV = 'test';
+    const app = require('../backend/src/index');
+    localServer = http.createServer(app);
+    await new Promise(resolve => localServer.listen(5000, resolve));
+  }
 
   try {
     // 1. Health & Config Checks
@@ -689,8 +702,6 @@ async function runTestSuite() {
     const unknownRes = await request('/api/unknown-endpoint');
     assert(unknownRes.status === 404 && unknownRes.data.error === 'Not found', 'Unknown /api route returns JSON 404');
 
-    await db.getPool().end();
-
     console.log(`\n=======================================================`);
     console.log(`  TEST RESULTS: ${testsPassed} PASSED, ${testsFailed} FAILED`);
     console.log(`=======================================================\n`);
@@ -701,6 +712,13 @@ async function runTestSuite() {
   } catch (error) {
     console.error('Fatal error during test run:', error);
     process.exit(1);
+  } finally {
+    try {
+      await db.getPool().end();
+    } catch (_) {}
+    if (localServer) {
+      await new Promise(r => localServer.close(r));
+    }
   }
 }
 

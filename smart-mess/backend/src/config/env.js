@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const PLACEHOLDER_SECRETS = [
   'your_jwt_secret_min_32_chars_long_random_string_here',
