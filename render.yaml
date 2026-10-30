@@ -33,7 +33,7 @@ services:
         value: "test"
       - key: DB_SSL
         value: "true"
-      - key: CORS_ORIGIN
-        value: "http://localhost:5173"
+      - key: DATABASE_URL
+        sync: false
       - key: AUTH_RATE_LIMIT_MAX
         value: "50"

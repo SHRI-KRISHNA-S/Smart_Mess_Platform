@@ -1,16 +1,6 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-const {
-  DB_HOST = '127.0.0.1',
-  DB_PORT = 3306,
-  DB_USER = 'root',
-  DB_PASSWORD = '',
-  DB_NAME = 'smart_mess_db',
-} = process.env;
-
-let pool = null;
-
 function getPoolConfig() {
   const databaseUrl = (process.env.DATABASE_URL || process.env.MYSQL_URL || '').trim();
   const config = {
@@ -58,7 +48,7 @@ function getPoolConfig() {
     };
   }
 
-  // TiDB Cloud 'sys' is an internal MySQL database; use 'test' or 'smart_mess_db' for application data
+  // TiDB Cloud 'sys' is an internal MySQL database; use 'test' for application data
   if (config.database === 'sys') {
     config.database = 'test';
   }

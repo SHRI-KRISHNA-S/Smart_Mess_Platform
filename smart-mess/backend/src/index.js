@@ -27,10 +27,12 @@ app.use(
   })
 );
 
-// CORS configuration (allow Vite frontend origin with credentials)
+// CORS configuration
+// In production, frontend is served from same Express origin, so allow same-origin.
+// In development, allow the Vite dev server origin.
 app.use(
   cors({
-    origin: CORS_ORIGIN,
+    origin: NODE_ENV === 'production' ? true : CORS_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']

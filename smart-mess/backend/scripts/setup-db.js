@@ -121,9 +121,23 @@ async function runSetup() {
       // 3. Third attempt: If DATABASE_URL is available, connect using uri
       const rawUri = (process.env.DATABASE_URL || '').trim();
       if (rawUri) {
-        console.log('Direct config failed. Retrying directly with raw DATABASE_URL...');
+        console.log('Direct config failed. Retrying with raw DATABASE_URL (with SSL)...');
         try {
-          initialConnection = await mysql.createConnection(rawUri);
+          // Parse the raw URL and add SSL + multipleStatements
+          const rawParsed = new URL(rawUri);
+          const rawConfig = {
+            host: rawParsed.hostname.trim(),
+            port: Number(rawParsed.port) || 3306,
+            user: decodeURIComponent(rawParsed.username).trim(),
+            password: decodeURIComponent(rawParsed.password).trim(),
+            database: rawParsed.pathname.replace(/^\//, '').trim() || targetDb,
+            multipleStatements: true,
+            ssl: {
+              minVersion: 'TLSv1.2',
+              rejectUnauthorized: true
+            }
+          };
+          initialConnection = await mysql.createConnection(rawConfig);
         } catch (uriErr) {
           console.error('All connection attempts failed.');
           console.error('Error detail:', uriErr.message);

@@ -33,7 +33,7 @@ module.exports = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
   HOME_COLLEGE_NAME: process.env.HOME_COLLEGE_NAME || 'National Institute of Technology',
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173',
   AUTH_RATE_LIMIT_MAX: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '20', 10),
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || ''
 };
