@@ -96,25 +96,35 @@ async function runSetup() {
   validateAdminPassword(ADMIN_PASSWORD);
 
   let initialConnection;
+  const targetDb = config.database || 'smart_mess_db';
+
+  // 1. First attempt: connect to MySQL server without database specified (allows creating target database)
   try {
     console.log(`Connecting to MySQL server at ${config.host}:${config.port} as user "${config.user}"...`);
-    // Connect with database option directly if provided
-    initialConnection = await mysql.createConnection(config);
-  } catch (err) {
-    console.error('Failed to connect to MySQL server. Please ensure MySQL is running and your database credentials are correct.');
-    console.error('Error detail:', err.message);
-    process.exit(1);
+    const serverOnlyConfig = { ...config };
+    delete serverOnlyConfig.database;
+    initialConnection = await mysql.createConnection(serverOnlyConfig);
+  } catch (serverErr) {
+    // 2. Second attempt: connect directly to target database (in case server restricts non-db connections)
+    console.log(`Initial connection without database failed (${serverErr.message}). Retrying with direct database "${targetDb}"...`);
+    try {
+      initialConnection = await mysql.createConnection(config);
+    } catch (directErr) {
+      console.error('Failed to connect to MySQL server. Please ensure MySQL is running and your database credentials are correct.');
+      console.error('Error detail:', directErr.message);
+      process.exit(1);
+    }
   }
 
   try {
-    // 1. Ensure database exists (safe on both local and managed cloud DBs)
+    // Ensure database exists and select it
     try {
-      console.log(`Ensuring database "${config.database}" exists...`);
-      await initialConnection.query(`CREATE DATABASE IF NOT EXISTS \`${config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-      await initialConnection.changeUser({ database: config.database });
+      console.log(`Ensuring database "${targetDb}" exists...`);
+      await initialConnection.query(`CREATE DATABASE IF NOT EXISTS \`${targetDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+      await initialConnection.changeUser({ database: targetDb });
     } catch (createErr) {
-      console.log(`Note: CREATE DATABASE skipped (${createErr.message}), proceeding with active database "${config.database}".`);
-      await initialConnection.changeUser({ database: config.database });
+      console.log(`Note: CREATE DATABASE (${createErr.message}), switching directly to "${targetDb}"...`);
+      await initialConnection.changeUser({ database: targetDb });
     }
 
     // 2. Read and run schema.sql
