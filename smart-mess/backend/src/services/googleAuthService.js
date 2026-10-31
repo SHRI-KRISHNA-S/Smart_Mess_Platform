@@ -1,13 +1,23 @@
 const { OAuth2Client } = require('google-auth-library');
-const { GOOGLE_CLIENT_ID, NODE_ENV } = require('../config/env');
+const { GOOGLE_CLIENT_ID, NODE_ENV, cleanGoogleClientId } = require('../config/env');
 
 const ALLOWED_DOMAIN = 'bitsathy.ac.in';
 
 let oauthClientInstance = null;
+let cachedClientId = null;
+
+function getResolvedClientId() {
+  const raw = typeof process.env.GOOGLE_CLIENT_ID === 'string'
+    ? process.env.GOOGLE_CLIENT_ID
+    : (GOOGLE_CLIENT_ID || '');
+  return cleanGoogleClientId ? cleanGoogleClientId(raw) : raw.trim().replace(/^['"]|['"]$/g, '');
+}
 
 function getOAuthClient() {
-  if (!oauthClientInstance) {
-    oauthClientInstance = new OAuth2Client(GOOGLE_CLIENT_ID || undefined);
+  const currentClientId = getResolvedClientId();
+  if (!oauthClientInstance || cachedClientId !== currentClientId) {
+    oauthClientInstance = new OAuth2Client(currentClientId || undefined);
+    cachedClientId = currentClientId;
   }
   return oauthClientInstance;
 }
@@ -97,18 +107,20 @@ async function verifyGoogleIdToken(idToken) {
     return parseMockGoogleToken(idToken);
   }
 
-  const client = getOAuthClient();
+  const clientId = getResolvedClientId();
 
-  if (!GOOGLE_CLIENT_ID) {
+  if (!clientId) {
     const err = new Error('GOOGLE_CLIENT_ID is not configured on the server. Please check your environment variables.');
     err.code = 'CLIENT_ID_UNCONFIGURED';
     throw err;
   }
 
+  const client = getOAuthClient();
+
   try {
     const ticket = await client.verifyIdToken({
       idToken,
-      audience: GOOGLE_CLIENT_ID
+      audience: clientId
     });
 
     const payload = ticket.getPayload();

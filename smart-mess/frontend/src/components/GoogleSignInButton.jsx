@@ -116,12 +116,16 @@ export default function GoogleSignInButton({
   const handleFallbackClick = () => {
     if (!clientId) {
       if (onError) {
-        onError('Google Sign-In is not yet configured. Please set GOOGLE_CLIENT_ID in backend/.env.');
+        onError('Google Sign-In is not yet configured. Please set GOOGLE_CLIENT_ID in your Render Dashboard environment variables.');
       }
       return;
     }
     if (window.google?.accounts?.id) {
       window.google.accounts.id.prompt();
+    } else {
+      if (onError) {
+        onError('Google Identity Services library is loading or blocked by an ad-blocker. Please refresh the page.');
+      }
     }
   };
 

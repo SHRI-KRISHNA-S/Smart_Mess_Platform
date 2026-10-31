@@ -21,9 +21,22 @@ const { syncDailyPolls, startDailyPollScheduler } = require('./services/pollServ
 const app = express();
 
 // Security HTTP headers with Helmet
+// In production, explicitly allow Google Identity Services and Google Fonts assets
 app.use(
   helmet({
-    contentSecurityPolicy: NODE_ENV === 'production' ? undefined : false
+    contentSecurityPolicy:
+      NODE_ENV === 'production'
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/client'],
+              styleSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style', 'https://fonts.googleapis.com'],
+              fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+              frameSrc: ["'self'", 'https://accounts.google.com/'],
+              connectSrc: ["'self'", 'https://accounts.google.com/']
+            }
+          }
+        : false
   })
 );
 
@@ -69,9 +82,10 @@ app.get('/api/health', (req, res) => {
 
 // Public config endpoint (exposes HOME_COLLEGE_NAME and googleClientId)
 app.get('/api/config', (req, res) => {
+  const currentGoogleClientId = (process.env.GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID || '').trim().replace(/^['"]|['"]$/g, '');
   res.json({
     homeCollegeName: HOME_COLLEGE_NAME,
-    googleClientId: GOOGLE_CLIENT_ID || ''
+    googleClientId: currentGoogleClientId
   });
 });
 

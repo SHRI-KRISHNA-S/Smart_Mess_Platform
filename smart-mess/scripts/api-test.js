@@ -115,6 +115,7 @@ async function runTestSuite() {
 
     const config = await request('/api/config');
     assert(config.status === 200 && typeof config.data.homeCollegeName === 'string', 'GET /api/config returns 200 and configured college name');
+    assert(typeof config.data.googleClientId === 'string', 'GET /api/config returns googleClientId string');
 
     // 2. Registration Validation Errors
     console.log(`\n[TEST GROUP 2] Registration Validation & Role Assignment`);
@@ -518,6 +519,20 @@ async function runTestSuite() {
       })
     });
     assert(invalidTokenAttempt.status === 401, 'Case 7b: Invalid Google ID token rejected with 401 Unauthorized');
+
+    // CASE 7c: Missing/unconfigured GOOGLE_CLIENT_ID produces clear 500 diagnostic
+    const savedClientId = process.env.GOOGLE_CLIENT_ID;
+    process.env.GOOGLE_CLIENT_ID = '';
+    const unconfiguredAttempt = await request('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({
+        idToken: 'real_google_jwt_sample_token',
+        role: 'student'
+      })
+    });
+    process.env.GOOGLE_CLIENT_ID = savedClientId || '';
+    assert(unconfiguredAttempt.status === 500 && unconfiguredAttempt.data.details === 'GOOGLE_CLIENT_ID missing', 'Case 7c: Missing GOOGLE_CLIENT_ID returns 500 with clear diagnostic message');
+
 
     // CASE 8: User attempting to manipulate their role to Admin -> REJECTED (403)
     const roleManipulateAttempt = await request('/api/auth/google', {

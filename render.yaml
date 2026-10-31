@@ -37,3 +37,8 @@ services:
         sync: false
       - key: AUTH_RATE_LIMIT_MAX
         value: "50"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: BITCENTRAL_UPSTREAM_HOST
+        value: "bitcentral-v2-dgvs.onrender.com"
+

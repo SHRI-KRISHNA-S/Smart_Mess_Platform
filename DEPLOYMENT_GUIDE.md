@@ -88,6 +88,7 @@ git push origin main
 | `ADMIN_EMAIL` | `admin@mess.local` | Initial admin login email |
 | `ADMIN_PASSWORD` | `AdminSecure2025!` | Strong admin password |
 | `HOME_COLLEGE_NAME` | `Bannari Amman Institute of Technology` | College name |
+| `GOOGLE_CLIENT_ID` | `425189906555-ke5qlv5m8odqh8jhdqcqa9ek11tr8l31.apps.googleusercontent.com` | Google OAuth 2.0 Web Client ID |
 
 *(Alternatively: You can replace the individual DB variables with a single `DATABASE_URL` if TiDB provided a connection string).*
 

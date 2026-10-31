@@ -167,6 +167,13 @@ router.post('/google', validateBody(googleAuthSchema), async (req, res, next) =>
     try {
       verified = await verifyGoogleIdToken(idToken);
     } catch (err) {
+      if (err.code === 'CLIENT_ID_UNCONFIGURED') {
+        return res.status(500).json({
+          error: 'Configuration error',
+          message: 'Google Sign-In is not configured on the server. Please set GOOGLE_CLIENT_ID in server environment variables.',
+          details: 'GOOGLE_CLIENT_ID missing'
+        });
+      }
       return res.status(401).json({
         error: 'Authentication failed',
         details: 'Invalid or expired Google token'
