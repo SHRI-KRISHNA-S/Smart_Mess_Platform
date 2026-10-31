@@ -343,6 +343,30 @@ async function runSetup() {
       console.log('Admin account updated with current password from .env successfully.');
     }
 
+    // 5. Ensure default demo student account exists
+    const DEMO_STUDENT_EMAIL = process.env.DEMO_STUDENT_EMAIL || 'student@mess.local';
+    const DEMO_STUDENT_PASSWORD = process.env.DEMO_STUDENT_PASSWORD || 'StudentSecure2026!';
+    console.log(`Ensuring demo student account exists for email "${DEMO_STUDENT_EMAIL}"...`);
+    const studentPasswordHash = await bcrypt.hash(DEMO_STUDENT_PASSWORD, 12);
+    const [studentCheck] = await initialConnection.query('SELECT id FROM users WHERE email = ?', [DEMO_STUDENT_EMAIL]);
+
+    if (studentCheck.length === 0) {
+      await initialConnection.query(
+        `INSERT INTO users (name, email, college_name, student_type, password_hash, role, auth_provider, department, batch_start_year, batch_end_year, profile_completed)
+         VALUES (?, ?, ?, 'home', ?, 'student', 'local', 'Computer Science and Engineering (CSE)', 2024, 2028, 1)`,
+        ['Demo Student', DEMO_STUDENT_EMAIL, HOME_COLLEGE_NAME, studentPasswordHash]
+      );
+      console.log('Demo student account created successfully.');
+    } else {
+      await initialConnection.query(
+        `UPDATE users
+         SET password_hash = ?, role = 'student'
+         WHERE email = ?`,
+        [studentPasswordHash, DEMO_STUDENT_EMAIL]
+      );
+      console.log('Demo student account password updated successfully.');
+    }
+
     console.log('--- Database Setup Completed Successfully ---');
   } catch (err) {
     console.error('Error during database setup:', err.message);
